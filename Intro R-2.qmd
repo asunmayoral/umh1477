@@ -1,0 +1,95 @@
+---
+title: "Intro R-2"
+author: "A.M.Mayoral, J.Morales"
+format: html
+editor: visual
+---
+
+## Tibbles y pipes
+
+En tibbles la aplicación de funciones se suele hacer a través de 'pipes' (librería `dplyr` en `tidyverse`).
+
+### Operaciones básicas
+
+1. Visualiza las primeras filas del tibble `mydata`. Añade una nueva variable llamada 'no' que se obtenga sumando las columnas 'nox' y 'no2'. Calcula la dimensión de la base de datos.
+
+```{r}
+library(tidyverse)
+data(mydata,package="openair")
+
+head(mydata)
+mydata %>%
+  mutate(no=nox+no2) %>%
+  head
+#mydata no cambia
+dim(mydata)
+```
+
+1. Si queremos conservar esta nueva variable, genera un nuevo tibble que incluya solo las variables 'date', 'nox', 'no2' y esta variable, y llámalo 'mydata_w'.
+```{r}
+mydata_w = mydata %>%
+  select(date,nox,no2) %>%
+  mutate(no=nox+no2)
+head(mydata_w)
+```
+1. Sobre mydata_w, convierte a fecha (con la librería 'lubridate' y la función `as_date`), la columna 'date'.
+```{r}
+library(lubridate)
+mydata_w = mydata_w %>%
+  mutate(date=as_date(date,tz=NULL))
+head(mydata_w)
+```
+
+1. Crea ahora una nueva variable 'date_c' que identifique por el año a cada uno de los registros (categorías). Guárdala en mydata_w
+
+```{r}
+mydata_w=mydata_w %>%
+  mutate(date_c=as.factor(year(date)))  
+```
+
+1. Selecciona las filas que correspondan a los años 1998 y 1999. Guárdalo en mydata_w89.
+```{r}
+mydata_w89 =mydata_w %>% 
+  filter(date_c %in% c("1998","1999"))
+dim(mydata_w89)
+```
+
+
+### Datos faltantes
+1.  Calcula cuántos datos faltantes tienes en cada columna del tibble `mydata_sel`.
+
+```{r}
+summary(mydata_sel)
+```
+
+1.  Calcula el promedio de las columnas de `mydata_sel` sin considerar los valores faltantes.
+
+```{r}
+mydata_sel %>%
+  summarise_all(funs(mean(.,na.rm=TRUE)))
+```
+
+1.  Guarda en un objeto llamado `faltantes` el número de datos faltantes en cada columna.
+
+```{r}
+faltantes = mydata_sel %>%
+  summarise_all(funs(sum(is.na(.))))
+faltantes
+```
+
+1.  Elimina los registros (filas) con algún dato faltante y guarda el nuevo objeto sin faltantes en `mydata_sel_sinna`. Verifica que ya no hay valores faltantes.
+
+```{r}
+mydata_sel_sinna=mydata_sel %>% 
+  drop_na()
+summary(mydata_sel_sinna)
+```
+
+1.  Sustituye los valores faltantes de `mydata_sel` con el promedio de valores en la columna correspondiente (primero has de cambiar a `double` las columnas `integer`). Llámalo `mydata_sel_rep`. Verifica que ya no hay valores faltantes.
+
+```{r}
+mydata_sel_rep = mydata_sel %>%
+  mutate_if(is.integer,as.double) %>%
+  replace_na(as.list(colMeans(.,na.rm=TRUE)))
+summary(mydata_sel_rep)
+```

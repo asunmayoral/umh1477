@@ -1,0 +1,838 @@
+---
+title: "Unidad1"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gridExtra)
+library(kableExtra)
+```
+
+# Aproximación MC
+```{r}
+# Simulaciones disponibles
+defectos <- c(2, 2, 0, 0, 0, 2, 1, 2, 1, 4, 1, 0, 0, 2, 4, 0, 0, 0, 0, 1, 1, 1, 2,
+    2, 3, 1, 0, 4, 3, 1, 0, 2, 2, 2, 3, 1, 0, 2, 2, 2, 3, 1, 0, 1, 0, 1, 2, 0, 0,
+    2, 3, 2, 3, 2, 4, 4, 0, 1, 1, 3, 0, 0, 3, 2, 0, 0, 0, 3, 0, 1, 4, 1, 1, 2, 1,
+    1, 4, 1, 1, 1, 0, 1, 0, 1, 2, 2, 1, 3, 1, 2, 1, 2, 3, 1, 2, 5, 1, 1, 1, 1, 0,
+    1, 1, 1, 2, 1, 0, 0, 1, 2, 2, 1, 1, 1, 1, 0, 3, 1, 1, 1, 1, 4, 4, 0, 6, 6, 1,
+    1, 1, 0, 2, 3, 1, 0, 0, 2, 0, 2, 1, 1, 1, 2, 1, 1, 1, 1, 2, 5, 0, 1, 3, 1, 1,
+    4, 1, 2, 1, 1, 0, 2, 1, 2, 1, 3, 3, 2, 0, 3, 0, 1, 3, 0, 1, 2, 0, 1, 0, 0, 2,
+    2, 1, 2, 0, 0, 0, 1, 1, 2, 3, 1, 0, 1, 0, 1, 1, 1, 1, 1, 5, 3)
+# Número de simulaciones/observaciones
+nsim = length(defectos)
+# Tamaño de la caja
+tamaño <- rep(144, 200)
+# Conjunto de datos
+huevos <- data.frame(tamaño, defectos)
+```
+
+```{r}
+# PROBABILIDAD CON ESTIMACIÓN MC
+# Pr(X > 3)
+sel <- dplyr::filter(huevos, defectos > 3)
+prob <- nrow(sel)/nsim
+cat("Probabilidad estimada [Pr(X > 3)]: ", prob)
+
+# otro modo de seleccionar
+cat("\n Probabilidad estimada [Pr(X > 3)]: ", mean(huevos$defectos>3))
+
+```
+
+```{r}
+# MEDIAS Y DISPERSIÓN CON APROXIMACIÓN MC
+# media
+media=mean(huevos$defectos)
+# dispersión
+varianza=var(huevos$defectos)
+desvtip=sd(huevos$defectos)
+
+# ic para la media
+error=sqrt(sum((huevos$defectos-media)^2)/(nsim^2))
+cat("\n Error Estimado (media)=",round(error,3))
+# límites del IC redondeados a 3 cifras decimales
+ic.low=media-qnorm(0.975)*error
+ic.up=media+qnorm(0.975)*error
+cat("\n IC(95%)[AproxMC(media)]=[",ic.low,",",ic.up,"]")
+```
+
+# Algoritmo para obtener la estimación MC
+
+```{r}
+# Algoritmo para obtener la estimación MC
+montecarlo=function(datosim,type,z=NULL,alpha=0.95){
+  # datosim es un vector con las simulaciones
+  # type="mean" -> estimar una media
+  # type="prob" -> estimar probabilidad acumulada hasta un punto z
+  # z -> Pr(x<=z), z en el espacio de estados de X
+  # alpha -> nivel de significatividad (por defecto 95%)
+  nsim=length(datosim)
+  
+if(type=="mean") {
+  estim=mean(datosim)
+  error=sum((datosim-estim)^2)/(nsim^2)
+  }
+else if(type=="prob"){
+    Iprob=(datosim<=z)*1
+    estim=mean(Iprob)
+    error=sum((Iprob-estim)^2)/(nsim^2)
+  }
+else{
+    cat("Introduce type=mean o prob (entrecomillados)")
+    break
+  }
+  
+ic.low=estim-qnorm((1+alpha)/2)*error
+ic.up=estim+qnorm((1+alpha)/2)*error
+cat("\n Estimación MC de una ",ifelse(type=="mean","media","probabilidad"))
+return(data.frame(estim,error,ic.low,ic.up))
+}
+
+```
+
+```{r}
+montecarlo(defectos,type="mean")
+montecarlo(defectos,type="prob",z=2)
+
+```
+
+# Distribuciones de probabilidad
+
+```{r}
+# Exponencial. Densidad
+lambda=0.05
+x=seq(0,150,1)
+datos=tibble(x,y=dexp(x,lambda))
+g1=ggplot(datos,aes(x=x,y=y))+
+  geom_line()+
+  labs(title=paste0("D.Exp(",lambda,")"))
+g1
+
+# Exponencial. Simulación
+lambda=0.05
+nsim=5000
+x=rexp(nsim,lambda)
+datos=tibble(x)
+g2=ggplot(datos,aes(x=x))+
+  geom_histogram(aes(y=..density..), alpha=0.5,position="identity")+
+  geom_density() +
+  labs(title=paste0("D.Exp(",lambda,")"))+
+  xlim(0,150)
+g2
+
+grid.arrange(g1,g2,ncol=2)
+```
+
+# MÉTODO TRANSFORMADA INVERSA
+```{r}
+nsim=1000
+unif=runif(nsim)
+sim=qnorm(unif)
+
+x=seq(-4,4,length=nsim)
+fdist=pnorm(x)
+datos=tibble(x,fdist,unif,sim)
+ggplot(datos,aes(x=x,y=fdist))+
+  geom_line()+
+  geom_point(aes(y=unif,x=sim),col="red")
+```
+```{r}
+nsim <- 1500
+# datos uniformes
+unif <- runif(nsim)
+# Valores a devolver (piezas defectuosas por caja)
+valores <- c(0, 1, 2)
+# Distribución de probabilidad
+prob <- c(0.82, 0.15, 0.03)
+probacum <- cumsum(prob)
+x=c()
+# Simulación de la variable de interés
+for(i in 1:nsim){
+x[i] <- valores[min(which(unif[i] <= probacum))] 
+}
+
+datos=as_tibble(prop.table(table(x)))
+datos=datos %>% 
+  bind_cols(prob) %>%
+  pivot_longer(cols=2:3,names_to="tipo",values_to="probs")
+datos$tipo=factor(datos$tipo,labels=c("frec","prob"))
+ 
+ggplot(datos,aes(x,probs))+
+  geom_col(aes(fill=tipo),position = position_dodge(width = 0.3))
+```
+
+
+
+# OTRAS DISTRIBUCIONES DISCRETAS
+
+## Ejemplo 1
+```{r}
+# EJEMPLO 1
+# Parámetros de la simulación
+set.seed(19)
+nsim <- 1500
+# datos uniformes
+unif <- runif(nsim)
+# Valores a devolver (piezas defectuosas por caja)
+valores <- c(0, 1, 2)
+# Valores a devolver y probabilidad acumulada para la política 1
+prob1 <- c(0.82, 0.15, 0.03)
+probacum1 <- cumsum(prob1)
+# Valores a devolver y probabilidad acumulada para la política 2
+prob2 <- c(0.85, 0.13, 0.02)
+probacum2 <- cumsum(prob2)
+# Inicialización de variables donde almacenamos las simulaciones
+xs1 <- c(); benef1 <- c()
+xs2 <- c(); benef2 <- c()
+# Simulación de la variable de interés
+i <- 1
+while (i <= nsim)
+{
+  # politica 1
+  xs1[i] <- valores[min(which(unif[i] <= probacum1))] 
+  benef1[i] <- ifelse(xs1[i]==0, 300, -50*xs1[i]) # beneficios
+  # politica 2
+  xs2[i] <- valores[min(which(unif[i] <= probacum2))]  
+  benef2[i] <- ifelse(xs2[i]==0, 300, -50*xs2[i])
+    # nueva simulación
+  i <- i+1
+}
+# Resultados para las nsim simulaciones
+simulacion <- data.frame(defec.s1 = xs1, benef.s1 = benef1, 
+                         defec.s2 = xs2, benef.s2 = benef2)
+cat("Una muestra de las simulaciones realizadas es ...\n")
+## Una muestra de las simulaciones realizadas es ...
+
+head(simulacion)
+```
+
+## Ejemplo 2
+```{r 01-020}
+#EJEMPLO ex:discreta2
+# Parámetros de la simulación
+set.seed(1970)
+nsim <- 1000
+# datos uniformes
+unif <- runif(nsim)
+# Beneficios asociados a cada plan
+BpB <- c(2000, 3000)  # beneficio variable
+BpC <- c(-1000, 2000, 8000) # beneficio variable
+# Distribuciones de probabilidiad para los planes B y C
+probB <- c(0.4, 0.6)
+probacumB <- cumsum(probB) # función de distribución plan B
+probC <- c(0.2, 0.5, 0.3)
+probacumC <- cumsum(probC) # función de distribución plan 
+# Inicialización de variables donde almacenamos las beneficios 
+# individuales para cada simulación
+benefB <- c()
+benefC <- c()
+# Simulación de la variable de interés
+i <- 1
+while (i <= nsim)
+{
+  # plan B
+  benefB[i] <- BpB[min(which(unif[i] <= probacumB))] 
+  # plan C
+  benefC[i] <- BpC[min(which(unif[i] <= probacumC))]  
+  # nueva simulación
+  i <- i+1
+}
+# Resultado
+simulacion <- data.frame(A=rep(2500,nsim),B = benefB, C = benefC)
+cat("Una muestra de las simulaciones realizadas es ...\n")
+head(simulacion)
+
+beneficios=simulacion %>% 
+  summarise(mPB = mean(B), sdPB = sd(B), 
+            mPC = mean(C), sdPC = sd(C))
+
+cat("Beneficios PlanA ($):",2500,
+    "Volatilidad (sd):",0,
+   "Beneficios PlanB ($):",beneficios$mPB,
+    "Volatilidad (sd):",beneficios$sdPB,
+    "Beneficios PlanC ($):",beneficios$mPC, 
+    "Volatilidad (sd):",beneficios$sdPC)
+```
+
+```{r 01-022}
+# Probabilidad beneficio > 2500
+c(prA = sum(simulacion$A>2500)/1000, 
+  prB = sum(simulacion$B>2500)/1000, 
+  prC = sum(simulacion$C>2500)/1000)
+```
+
+
+
+# MIXTURAS DE DISCRETAS
+## Ejemplo 1
+```{r 01-023}
+# EJEMPLO #mixtura1
+simula.ventas.micro <- function(clientes, semilla)
+{
+# Descripción del proceso de compra o no compra
+compra <- c("Si", "No")
+pcompra <- 0.50
+# Descripción del proceso de adquisión del microondas
+tipo <- c("Sencillo", "Estándar", "Lujo")
+prmicro <- c(0.25, 0.50, 0.25) # fmp X1
+prmicroacum <- cumsum(prmicro) # fon. distribución X1
+beneficio <- c(30, 60, 75)
+# Inicialización de variables para las simulaciones
+indicador <- c()             # proceso de compra
+micro <- c()                 # tipo microondas adquirido
+bind <- rep(0, clientes)     # beneficio individual
+bacum <- rep(0, clientes)    # beneficio acumulado
+
+## Simulación del proceso
+##########################
+i <- 1
+# Generamos uniformes para describir el proceso de compra y 
+# el tipo de microondas adquirido
+set.seed(semilla)
+ucompra <- runif(clientes) # uniformes para el indicador
+umicro <- runif(clientes)  # uniformes para la compra
+
+# Bucle de simulación
+while (i <= clientes)
+{
+  # Proceso de compra
+  indicador[i] <- ifelse(ucompra[i] <= 0.5, compra[1], compra[2])
+  # Tipo de microndas
+  if(indicador[i] == compra[1])
+  {
+    pos <- min(which(umicro[i] <= prmicroacum))
+    micro[i] <- tipo[pos]
+    bind[i] <- beneficio[pos]
+  }
+  else
+  {
+    micro[i] <- "Sin venta"
+    bind[i] <- 0
+  }
+  bacum[i] <- sum(bind[1:i])  # se acumulan todos los beneficios
+  # nueva simulación
+  i <- i+1
+}
+# Resultado
+return(data.frame(Compra = indicador, Tipo = micro, 
+                  Bind = bind, Bacum = bacum))
+}
+```
+
+
+```{r 01-024}
+#Generamos el proceso para 30 clientes y analizamos los resultados
+simulacion <- simula.ventas.micro(1000, 123)
+dim(simulacion)
+head(simulacion)
+mean(simulacion$Bind)
+mean(simulacion$Tipo=="Lujo")
+mean(simulacion$Bind[simulacion$Compra=="Si"])
+```
+
+
+
+```{r 01-025, fig.cap = "Frecuencia relativa de cada tipo de venta (izquierda) y beneficio acumulado para los 30 clientes (derecha)."}
+g1=simulacion %>%
+  group_by(Tipo) %>%
+  summarise(n=n()) %>%
+  mutate(prop=n/nrow(simulacion)) %>%
+  ggplot(aes(x = Tipo, y = prop)) +
+    geom_col(aes(fill = Tipo), position = "dodge") +
+    geom_text(aes(label = scales::percent(prop), 
+                  y = prop, group = Tipo),
+              position = position_dodge(width = 0.9),
+              vjust = 1.5)+
+  labs(x="Tipo de cliente",y="Proporción")+
+  theme(legend.position="none")
+
+g2 <- ggplot(simulacion, aes(1:30, Bacum)) + 
+  geom_line() +
+  labs(x = "Cliente", y = "Beneficio acumulado")
+grid.arrange(g1, g2, nrow = 1)
+```
+
+
+## Ejemplo 2
+```{r 01-029}
+# Parámetros iniciales
+nsim <- 5000
+semilla <- 12
+# Descripción variable indicadora
+exito <- c("Fracaso", "Moderado", "Éxito")
+pexito <- c(0.6, 0.3, 0.1)
+pexitoacum <- cumsum(pexito)
+# Descripción del proceso de evaluación por jurado
+clasifi <- c("Malo", "Regular", "Bueno")
+p1 <- c(0.5, 0.3, 0.2)
+p2 <- c(0.2, 0.4, 0.4)
+p3 <- c(0.1, 0.3, 0.6)
+p1acum <- cumsum(p1)
+p2acum <- cumsum(p2)
+p3acum <- cumsum(p3)
+
+# Inicialización de variables para las simulaciones
+producto <- c()             # éxito producto
+jurado <- c()               # clasificación jurado
+
+## Simulación del proceso
+##########################
+i <- 1
+# Generamos uniformes para describir el proceso de indicadores de éxito
+# y también el de evaluación o clasificación por el jurado
+set.seed(semilla)
+uexito <- runif(nsim)  
+uclasi <- runif(nsim)
+
+# Bucle de simulación
+while (i <= nsim)
+{
+  # Éxito del producto
+  producto[i] <- exito[min(which(uexito[i] <= pexitoacum))]
+  # Tipo de microndas
+  if(producto[i] == exito[1])
+  {
+    jurado[i] <- clasifi[min(which(uclasi[i] <= p1acum))]
+  }
+  else if (producto[i] == exito[2])
+  {
+    jurado[i] <- clasifi[min(which(uclasi[i] <= p2acum))]
+  }
+  else
+  {
+    jurado[i] <- clasifi[min(which(uclasi[i] <= p3acum))]    
+  }
+  # nueva simulación
+  i <- i+1
+}
+# Resultado
+simulacion <- data.frame(producto = producto, jurado = jurado)
+head(simulacion)
+mean(simulacion$producto[simulacion$jurado=="Malo"]=="Fracaso")
+den=sum((simulacion$jurado=="Malo")*1)
+num=sum((simulacion$jurado=="Malo")&(simulacion$producto=="Fracaso"))
+num/den
+```
+
+
+
+```{r 01-030a}
+distri.conjunta.frec <- table(simulacion)
+kbl(distri.conjunta.frec,caption="Frecuencias observadas en las simulaciones.") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"),full_width = F)
+```
+
+```{r 01-030b}
+distri.conjunta=as.data.frame(table(simulacion)/nsim)
+kbl(distri.conjunta,caption="Frecuencias relativas observadas en las simulaciones. Aproximación de la distribución conjunta.") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"),full_width = F)
+```
+
+
+```{r}
+distri.conjunta.frec[2,1]/sum(distri.conjunta.frec[,1])
+```
+
+
+```{r 01-031}
+distri.conjunta %>% 
+  filter(jurado == "Bueno") %>%
+  mutate(pr.bueno = sum(Freq), resultado = round(Freq/pr.bueno,4)) %>%
+  kbl(caption="Distribución condicionada a que el producto fue evaluado como Bueno por el jurado.")%>%
+      kable_styling(bootstrap_options =c("striped","hoover"),full_width = F)
+
+```
+
+
+```{r 01-032}
+distri.conjunta %>% 
+  filter(jurado == "Malo") %>%
+  mutate(pr.malo = sum(Freq), resultado = round(Freq/pr.malo,4)) %>%
+  kbl(caption="Distribución condicionada a que el producto fue evaluado como Malo por el jurado.") %>%
+  kable_styling(bootstrap_options =c("striped","hoover"),full_width = F)
+
+```
+
+
+# Método de composición
+
+
+```{r 01-035}
+# EJEMPLO #cont2
+# Parámetros iniciales
+nsim <- 5000
+set.seed(12)
+# Generamos uniformes 
+uniforme <- runif(nsim)
+# Calculamos x con F^-1
+xs <- uniforme^(1/3)
+# Calculamos y = h(x)
+ys <- 1 - xs
+# Devolvemos los valores de x e y
+simulacion <- data.frame(sim = 1:nsim, x = xs, y = ys)
+head(simulacion)
+
+mean(simulacion$y<1 & simulacion$y>0)
+```
+
+```{r 01-036}
+# Valor esperado y desviación típica de Y 
+datos <- simulacion$y
+cat("E(Y)=", round(mean(datos), 4))
+cat("sd(Y)=", round(sd(datos), 4))
+# Pr(0 <= Y <= 1) 
+cat("Pr(0 <= Y <= 1)=", round(sum(datos >= 0 & datos <= 1)/nsim, 4))
+# Pr(Y >= 1) 
+cat("Pr(Y >= 0.5)=", round(sum(datos >= 0.5)/nsim, 4))
+```
+
+```{r 01-037, fig.cap = "Función de densidad empírica e histogramas para X e Y."}
+g1 <- ggplot(simulacion, aes(x, ..density..)) + 
+  geom_histogram(fill = "steelblue") +
+  geom_density()+
+  labs(x = "X", y = "Densidad")
+g2 <- ggplot(simulacion, aes(y, ..density..)) + 
+  geom_histogram(fill = "steelblue") +
+  geom_density()+
+  labs(x = "Y", y = "Densidad")
+grid.arrange(g1, g2, nrow = 1)
+```
+
+# Combinaciones de variables
+
+## Ejemplo 1
+```{r 01-038}
+# EJEMPLO #combined1
+# Parámetros iniciales
+nsim <- 5000
+nvar <- 10  # número de variables
+set.seed(12)
+# Generamos matriz de datos uniformes de dimensiones nsim*nvar 
+uniforme <- matrix(runif(nsim*nvar), nrow = nsim)
+# Calculamos y_min e y_max
+ymin <- apply(uniforme, 1, min)
+ymax <- apply(uniforme, 1, max)
+# Calculamos rango
+rango <- ymax - ymin
+# Devolvemos los valores 
+simulacion <- data.frame(sim = 1:nsim, 
+                         ymin = ymin, ymax = ymax, 
+                         rango = rango)
+```
+
+
+```{r 01-039}
+#  Pr(Y_{min} <= 0.1, Y_{max} >= 0.8)$
+p1 = mean((simulacion$ymin <= 0.1) & (simulacion$ymax >= 0.8))
+cat("Pr(Y_{min} <= 0.1, Y_{max} >= 0.8)=", round(p1, 4))
+# Valor esperado del rango 
+cat("E(R)=",round(mean(simulacion$rango), 4))
+# Pr(R >= 0.5)
+cat("Pr(R >= 0.5)=",round(mean(simulacion$rango >= 0.5), 4))
+```
+
+
+```{r 01-040, fig.cap = "Simulaciones del mímimo, máximo y rango de X1,...,X10 v.a. U(9,1)."}
+orden <- c("ymin", "ymax", "rango")
+# Construimos matriz de datos para el gráfico
+datos <- pivot_longer(simulacion, cols = 2:4, 
+                      names_to = "Medida", values_to = "Valor")
+# gráfico
+ggplot(datos, aes(Valor,fill = Medida))+
+  geom_histogram(aes(y = ..density..), position = "identity", alpha = 0.3, bins = 50)+
+  labs(y = "Densidad",x = "",fill = "Variables")
+```
+
+## Ejemplo 2
+
+```{r 01-041}
+# Parámetros iniciales
+nsim <- 5000
+set.seed(12)
+# Generamos diámetros para tuercas y pernos
+tuercas <- rnorm(nsim, 2.03, 0.02)
+pernos <- rnorm(nsim, 2.00, 0.01)
+# Calculamos la diferencia y creamos filtro de calidad
+diferencia <- tuercas - pernos
+valid<- 1*(diferencia >0 & diferencia <= 0.06)
+# Devolvemos los valores 
+simulacion <- data.frame(sim = 1:nsim, 
+                         tuercas = tuercas, 
+                         pernos = pernos, 
+                         diferencia= diferencia, 
+                         valid = valid)
+```
+
+
+
+```{r 01-042, fig.cap = "Simulaciones del proceso de calidad para tuercas y pernos."}
+# Calidad del proceso
+g1 <- simulacion %>%
+  count(valid)%>%
+  mutate(prop = prop.table(n)) %>%
+  ggplot(aes(x = as.factor(valid), y = prop, label = scales::percent(prop))) + 
+  geom_col(fill = "steelblue", position = "dodge") +
+  scale_x_discrete(labels = c("No", "Sí")) +
+  scale_y_continuous(labels = scales::percent)+
+  geom_text(position = position_dodge(width = 0.9), vjust = 1.5,size = 3)+
+  labs(x = "Resultado del proceso: validez", y = "Porcentaje")
+# Diferencia
+g2 <- ggplot(simulacion, aes(diferencia)) + 
+  geom_histogram(fill = "steelblue",color="grey") +
+  geom_vline(xintercept = c(0, 0.06), col = "red") +
+  labs(x = "Diferencia Tuerca-Perno", y = "Frecuencia")
+# Diámetros
+orden <- c("tuercas", "pernos")
+datos <- pivot_longer(simulacion, cols = 2:3, names_to = "Medida", values_to = "Valor")
+# gráfico
+g3 <- ggplot(datos, aes(Medida, Valor)) + 
+  geom_boxplot(fill = "steelblue") +
+  scale_x_discrete(limits = orden, labels = orden) +
+  labs(x = "", y = "Diámetro")
+# Combinación
+grid.arrange(g1, g2, g3, nrow = 2)
+```
+
+```{r}
+10000*(1 - mean(simulacion$valid == 1))
+```
+
+## Ejemplo 3
+
+
+```{r 01-044}
+# Parámetros iniciales
+nsim <- 5000
+set.seed(12)
+# Generamos longitudes de las secciones
+LA <- rnorm(nsim, 20, sqrt(0.04))
+LB <- rnorm(nsim, 14, sqrt(0.01))
+LC <- rnorm(nsim, 26, sqrt(0.04))
+# Calculamos longitud total y verificamos requisitos
+L <- LA + LB + LC - 4
+valid <- 1*(L >= 55.5 & L <= 56.5)
+# Devolvemos los valores 
+simulacion <- data.frame(sim = 1:nsim, LA = LA, LB = LB, 
+                         LC = LC, L = L,valid=valid)
+```
+
+```{r 01-045}
+#  Pr proceso cumpla criterios calidad
+p = mean(simulacion$valid == 1)
+error = sqrt((sum(simulacion$valid-p)^2)/(nsim^2))
+alpha = 0.05 # 1-alpha=nivel de confianza para el IC
+ic.low = p - qnorm(1-alpha/2)*error
+ic.up = p + qnorm(1-alpha/2)*error
+cat("Pr(barra utilizable)=", p)
+cat("Error de la aproximación=", error)
+cat("IC(", 1-alpha,"%)= [", ic.low,",", ic.up,"]")
+```
+
+```{r}
+desechos=25000*(1-p)
+cat("Barras desechadas en un mes:", desechos)
+```
+
+```{r}
+benef=(25000-desechos)*300-desechos*100
+cat("Beneficio obtenido en un mes:", benef, "€")
+```
+
+# MODELOS SECUENCIALES
+
+## Ejemplo 1
+```{r}
+# Función para simular el proceso de fabricación con tres subprocesos ABC encadenados.
+simula.proceso=function(semilla, nsim, nciclo, alpha, beta, delta, ta, tb, tc){
+# semilla=Semilla aleatoria y nsim=nº simulaciones o ciclos a simular
+#nciclo es el número de días del ciclo
+# alpha, beta y delta son los parámetros de las exponenciales TA,TB,TC
+# ta,tb y tc son los tiempos de funcionamiento diarios para los procesos A, B y C.
+Tciclo=Dciclo = rep(0, nsim)   # tiempo de ciclo (en horas T y días D)
+Tpotencial = rep(0, nsim)      # tiempo(en horas) que funcionaría sin fallos
+fallo = c()                   # qué proceso ha fallado en cada ciclo
+procesos = c("A", "B", "C")
+
+set.seed(semilla)
+# simulamos las duraciones para todos los ciclos
+TA = rexp(nsim, alpha)  
+TB = rexp(nsim, beta)
+TC = rexp(nsim, delta)
+t = c(ta, tb, tc) # funcionamiento diario de cada proceso
+
+for(j in 1:nsim){
+  T = c(TA[j], TB[j], TC[j])      # tiempos de vida para el ciclo j
+  nfallo = T/t                  # número días que funcionará cada proceso
+  falla = which.min(nfallo)     # qué proceso falla primero
+  if(nfallo[falla] <= nciclo){  # si falla antes de cerrar el ciclo
+   fallo[j] = procesos[falla]   #identificamos el proceso que falla
+   Dciclo[j] = T[falla]/t[falla]   # y lo pasamos a días
+   Tciclo[j] = Tpotencial[j]=24*Dciclo[j]   # duración del ciclo (en horas)
+  }
+  else{                       #si no falla ninguno antes de cerrar el ciclo
+    Tciclo[j] = 24*7            #cerramos el ciclo sin fallos
+    Dciclo[j] = 7
+    fallo[j] = "No"
+    Tpotencial[j] = T[falla]/t[falla]*24    # y guardamos la duración potencial 
+  }
+} # fin del for (j)
+resultado = data.frame(ciclo = 1:nsim, fallo,
+                     Tciclo = round(Tciclo, 2),Dciclo = round(Dciclo, 2),
+                     Tpotencial = round(Tpotencial, 2),
+                     DA = round(TA/ta, 2), DB = round(TB/tb, 2), DC = round(TC/tc, 2))
+
+return(resultado)
+}
+```
+
+
+```{r procesofabricacion}
+nciclo = 7; alpha = 1/1000; beta = 1/333; delta = 1/167
+ta = 15.6;tb = 5.52; tc = 2.88
+semilla = 12
+
+#set.seed(semilla)
+nsim=5000                  
+simulacion=simula.proceso(semilla,nsim,nciclo,alpha,beta,delta,ta,tb,tc)
+kbl(head(simulacion),caption="Simulaciones para el proceso de fabricación con tres subprocesos encadenados A, B y C. Tipo de fallo, tiempos de funcionamiento del sistema (Tciclo en horas, Dciclo en días) y tiempo de funcionamiento potencial (Tpotencial en horas). Días de vida DA, DB, DC de los procesos.") %>%
+ kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+
+```{r 01-047}
+# probabilidad de que no falle
+m = mean(simulacion$fallo == "No")
+error = sqrt(sum(((simulacion$fallo == "No")*1-m)^2) / (nsim^2))
+ic.low = m - qnorm(0.975)*error
+ic.up = m + qnorm(0.975)*error
+cat("Pr(sin fallo antes del ciclo=",m)
+cat("IC(Probabilidad)=[",round(ic.low, 4),",",round(ic.up, 4),"]")
+```
+
+
+
+```{r 01-048, fig.cap = "Gráfico del ciclo de vida y de la probabilidad del tiempo de fabricación sin fallos."}
+#  Representación gráfica del ciclo de vida: tabla de probabilidades
+g1 = simulacion %>%
+  group_by(fallo) %>%
+  summarise(n = n(), prop = n/nrow(simulacion)) %>%
+  ggplot(aes(x = fallo, y = prop)) +
+    geom_col(aes(fill = fallo), position = "dodge") +
+    geom_text(aes(label = scales::percent(prop), 
+                  y = prop, group = fallo),
+              position = position_dodge(width = 0.9),
+              vjust = 1.5)+
+  labs(x = "Tipo de fallo",y = "Proporción")+
+  theme(legend.position = "none")
+
+
+# Tiempo de vida en función del ciclo
+g2 <- ggplot(simulacion, aes(fallo, Tciclo)) + 
+  geom_boxplot(fill = "steelblue") +
+  labs(x = "Tipo de fallo", y = "Tiempo de funcionamiento (horas)")
+grid.arrange(g1, g2, nrow = 1)
+```
+
+
+
+```{r 01-049}
+# tpo medio de funcionamiento sin fallos
+m = mean(simulacion$Tpotencial)
+error = sqrt(sum((simulacion$Tpotencial-m)^2) / (nsim^2))
+ic.low = m - qnorm(0.975)*error
+ic.up = m + qnorm(0.975)*error
+cat("E(Tpotencial)=",round(m/24, 2))
+cat("IC(estimación)=[",round(ic.low/24, 2),",",round(ic.up/24, 2),"]")
+```
+
+## Ejemplo 2
+
+```{r 01-052}
+# Parámetros tiempo funcionamiento (en minutos)
+tf.params <- estima.weibull(80*60, 50*60); tf.params
+# Tiempo de reparación para avería leve
+tr.leve <- estima.weibull(30, 15); tr.leve
+# Tiempo de reparación para avería moderada
+tr.moderado <- estima.weibull(60, 30); tr.moderado
+# Tiempo de reparación para avería moderada
+tr.grave <- estima.weibull(120, 45); tr.grave
+```
+
+```{r 01-053, warning=FALSE,message=FALSE}
+# Fijamos semilla y límite de tiempo para la simulación
+semilla <- 12
+set.seed(semilla)
+Tsim <- 259200
+# Incicializamos variables
+tf <- c()
+trepara <- c()
+averia <- c()
+ttotal <- 0
+ciclo <- c(0)
+# Creamos variables necesarias para la simulación del tipo de avería:
+# probabilidades de avería leve, moderada y grave
+eti <- c("leve", "moderada", "grave")
+pr1 <- c(0.85, 0.10, 0.05)  # si tf<=1500
+pr1acu <- cumsum(pr1)
+pr2 <- c(0.75, 0.15, 0.10)  # si 1500<tf<=3000
+pr2acu <- cumsum(pr2)
+pr3 <- c(0.65, 0.20, 0.15)  # si tf>3000
+pr3acu <- cumsum(pr3)
+
+#############################
+## Simulación del proceso
+#############################
+i <- 1
+while (ttotal<= Tsim)
+{
+  # Tiempo de funcionamiento
+  tf[i] <- rweibull(1, tf.params[1], tf.params[2])
+  # Tipo Averia
+  if(tf[i] <= 1500)
+      averia[i] <-eti[min(which(runif(1) <= pr1acu))]
+  else if(tf[i] > 1500 & tf[i] <= 3000)
+      averia[i] <-eti[min(which(runif(1) <= pr2acu))] 
+  else if(tf[i] > 3000)
+       averia[i] <-eti[min(which(runif(1) <= pr3acu))]
+ # tiempo de reparación
+  if(averia[i] == "leve")
+      trepara[i] <- rweibull(1, tr.leve[1], tr.leve[2])
+  else if(averia[i] == "moderada" )
+      trepara[i] <- rweibull(1, tr.moderado[1], tr.moderado[2])
+  else if(averia[i] == "grave")
+      trepara[i] <- rweibull(1, tr.grave[1], tr.grave[2]) 
+  # actualizamos tiempo total
+  ciclo[i]=tf[i]+trepara[i]
+  ttotal=ttotal+ciclo[i]
+  i <- i + 1
+}
+simulacion <- data.frame(tf, averia = as.factor(averia), 
+                         trepara,tiempo = cumsum(ciclo))
+```
+
+
+```{r 01-054}
+kbl(head(simulacion),caption = "Simulaciones para el sistema de corte de piedra.") %>%
+  kable_classic_2(full_width = F)
+# Descriptivo del sistema
+summary(simulacion)
+```
+
+
+```{r 01-055}
+# Tiempo total de funcionamiento del sistema (con reparaciones)
+ttotal <- last(simulacion$tiempo)
+# Tiempo a pleno rendimiento
+tpleno <- sum(simulacion$tf)
+# Tiempo a rendimiento reducido
+tparcial <-sum((simulacion$averia == "leve")*trepara*0.6)
+# Tiempo parado (reparaciones moderadas y graves)
+tdetenido <- sum((simulacion$averia != "leve")*trepara)
+# Juntamos los tiempos y calculamos porcentajes sobre el tiempo de funcionamiento total
+kbl(round(100*cbind(ttotal, tpleno, tparcial, tdetenido)/ttotal,2),
+    col.names=c("%Tiempo total","%Pleno rendimiento","%Rendimiento reducido","%Parado")) %>%
+  kable_classic_2(full_width = F)
+```

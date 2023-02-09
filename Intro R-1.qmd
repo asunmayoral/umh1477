@@ -1,0 +1,646 @@
+---
+title: "Intro R-1"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+```
+
+## Configuración, lectura y escritura
+
+1.  Identifica cuál es tu espacio de trabajo actual.
+2.  Especifica cuál quieres que sea tu espacio de trabajo en esta sesión, con comando y desde `RStudio>Ajustes>Set as working directory`.
+
+```{r}
+getwd()
+setwd("~/Dropbox/ESTADISTICA/SIMPROSIST/clases_1477/sintaxis1477")
+```
+
+1.  Borra todos los elementos en el espacio de trabajo.
+
+```{r}
+rm(list=ls())
+```
+
+1.  Solicita ayuda sobre funciones relacionadas con la lectura de ficheros (clave: "read"). Solicita ayuda sobre la función `read.csv`.
+
+```{r}
+help.search("read")
+??read
+?read.csv
+```
+
+1.  Carga un fichero de datos .csv de [Github](https://github.com/UMH1477/data1477): [cars](https://raw.githubusercontent.com/UMH1477/data1477/main/coches.csv). Este enlace se obtiene a partir del formato `raw`. Verifica qué objetos tienes en el entorno de sesión con `ls()`.
+
+```{r}
+cars=read.csv("https://raw.githubusercontent.com/UMH1477/data1477/main/coches.csv")
+head(cars)
+```
+
+1.  Importa a tu directorio de trabajo los datos en la url "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data", del [UCI Machine Learning Repository](https://archive.ics.uci.edu/), utilizando `download.file`. Recuerda que en ocasiones hay que utilizar el argumento `method=wb` para que funcione correctamente. Léelo a continuación en tu sesión y verifica que se carga correctamente.
+
+```{r}
+download.file(
+  url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data", 
+  destfile = "iris.data"
+  )
+iris=read.csv("iris.data")
+head(iris)
+```
+
+1.  Carga un fichero de código .r con funciones, de [Github](https://github.com/UMH1477/data1477): [chuletario](https://raw.githubusercontent.com/UMH1477/data1477/main/chuletario.R). Verifica qué objetos tienes en el entorno de sesión.
+
+```{r}
+source("https://raw.githubusercontent.com/UMH1477/data1477/main/chuletario.R")
+ls()
+```
+
+1.  Escribe a un fichero '.csv' en tu espacio de trabajo los datos 'cars'.
+
+```{r}
+write.csv(cars,file="cars.csv")
+```
+
+1.  Lee desde tu espacio de trabajo el fichero 'cars.csv'. Llámalo cars2 y visualízalo.
+
+```{r}
+cars2=read.csv("cars.csv")
+head(cars2)
+```
+
+1.  Con todos los objetos en el entorno de sesión, crea un fichero '.RData' y guárdalo en tu espacio de trabajo. Llámalo "trastero.RData".
+
+```{r}
+save.image(file="trastero.RData")
+```
+
+1.  Borra todos los objetos en el entorno de sesión y verifica que queda vacío. A continuación carga el archivo 'trastero.RData' y verifica qué objetos tienes en el entorno de sesión.
+
+```{r}
+rm(list=ls())
+ls()
+load("trastero.RData")
+ls()
+```
+
+1.  Guarda ahora únicamente el objeto `cars` y guárdalo en un fichero de datos de R, 'cars.RData'. Vuelve a borrar todos los objetos del entorno de trabajo. Realiza la carga del fichero '.RData' y verifica que se ha leído correctamente. Los ficheros '.RData' son muy útiles para almacenar en formato de R todo tipo de elementos.
+
+```{r}
+save(cars,file="cars.RData")
+rm(list=ls())
+load("cars.RData")
+ls()
+```
+
+1.  Carga el fichero de datos `Loblolly` en la librería preinstalada en R `datasets`. Visualiza las primeras filas.
+
+```{r}
+data(Loblolly)
+head(Loblolly)
+```
+
+1.  Carga el fichero de datos `mydata`, definido dentro de la librería de R `openair`. Visualiza las primeras filas. Tienes más información en su [web](https://cran.r-project.org/web/packages/openair/readme/README.html).
+
+```{r}
+#install.packages("openair")
+library(openair)
+data(mydata)
+head(mydata)
+```
+
+1.  Borra el fichero, asegúrate de desactivar la librería `openair` desde la ventana de 'Packages' en RStudio, y vuélvelo a cargar sin necesidad de cargar la librería `openair`.
+
+```{r}
+rm(mydata)
+data(mydata,package="openair")
+```
+
+## Tipos de datos y objetos
+
+En R existen 6 tipos de datos básicos: lógicos (`logical`), entero (`integer`), numérico (`numeric`), carácter (`character`), complejo (`complex`) y valores en bytes (`raw`). Para conocer el tipo basta utilizar la función `class()`.
+
+Los tipos de objetos disponibles en R son:
+
+| Vectores \| diversos \| c() \|
+| Factores \| cualitativos \| factor(), gl()\|
+| Listas \| elementos diversos \| list()\|
+| Matrices \| numéricos \| matrix(ncol=,nrow=);array(dim=) \|
+| Bases de datos \| columnas diversas \| data.frame() \|
+| Bases de datos enriquecidas \| tidyverse \| tibble() \|
+
+Para inspeccionar el tipo de objetos en R se utiliza `typeof()` y `mode()`. Para inspeccionar sus atributos (elementos que lo componen) se usa `attributes()`.
+
+### Asignación
+
+1.  Crea tres variables x, y, z, y asígnales los valores, 5,6,3 respectivamente. La asignación en R se realiza con los símbolos `=`, `<-` y `assign()`. Visualízalos a continuación.
+
+```{r}
+x=5
+y<-6
+assign("z",3)
+ls()
+x
+y;z # dos ejecuciones en una misma línea
+```
+
+### Caracteres
+
+1.  Crea un objeto llamado 'nombre' en el que guardes tu nombre de pila.
+2.  Crea un objeto llamado 'apellido' en el que guardes tu primer apellido.
+3.  Concatena nombre y apellido para tener tu nombre completo, separado por un espacio. Guárdalo en un objeto llamado 'nombre_completo'. Visualízalo, como cadena de caracteres y formateado sin comillas.
+4.  Vuelca a continuación en un fichero llamado "nombre.txt" el siguiente mensaje: "Mi nombre es ----" (---- ha de contener tu nombre_completo), seguido de un salto de línea. Abre el fichero y verifica que se volcó bien.
+5.  Ahora concatena nombre y apellido sin separar con un espacio y añádelo al fichero anterior.
+
+```{r}
+nombre = "Asun"; nombre
+apellido = "Martínez"; apellido
+nombre_completo = paste(nombre,apellido) 
+nombre_completo
+print(nombre_completo)
+cat(nombre_completo,sep="\n")
+cat(paste("Mi nombre es",nombre_completo),sep="\n",file="nombre.txt")
+cat(paste0(nombre,apellido),file="nombre.txt",append=TRUE) 
+```
+
+### Vectores
+
+1.  Crea un vector en el que el primer elemento sea tu nombre y el segundo tu apellido.
+2.  Crea una variable con tu edad. Llámala x. Verifica su clase.
+3.  Transforma 'x' a carácter (con `as.`) y comprueba que ha cambiado (con `is.`).
+4.  Crea un vector v1 con las edades de los miembros de tu familia.
+5.  Crea un vector v2 con la secuencia del 1 al 10.
+6.  Crea un vector v3 con una secuencia del 5 al 100 a intervalos de 10.
+7.  Crea un vector v4 con una secuencia del 2 al 200 y de longitud 10.
+8.  Calcula la longitud del vector v3.
+
+```{r}
+c(nombre,apellido)
+x=52; class(x)
+x_car=as.character(x); is.character(x_car)
+v1 = c(52,52,22,19,14);v1
+v2 = 1:10;v2
+v3 = seq(5,100,by=10);v3
+v4 = seq(2,200,length=10);v4
+length(v3)
+
+```
+
+### Factores
+
+1.  Crea un factor con 'gl', con 4 categorías y 3 repeticiones para cada una de ellas. Asigna etiquetas con las letras del alfabeto. Llámalo f1 y verifica la secuenciación que resulta.
+2.  Consulta las categorías de f1.
+3.  Crea ahora el factor f2 con 4 categorías y 3 repeticiones de cada una de ellas, pero de modo que estén secuenciadas como 'abcdabcdabcd'.
+4.  Categoriza el vector v3 en dos categorías: "a" para los elementos menores o iguales a 50 y "b" para los elementos mayores a 50. Llámalo f3.
+
+```{r}
+f1 = gl(4,3,labels=c("a","b","c","d"));f1
+levels(f1)
+f2= factor(rep(c("a","b","c","d"),3));f2
+f3=cut(v2,breaks=c(min(v2),50,max(v3)),include.lowest=TRUE, right=TRUE);f3
+```
+
+### Listas
+
+1.  Crea una lista que contenga como elementos v=v1 y f=f1. Llámalo l1.
+2.  Calcula la dimensión de la lista l1.
+
+```{r}
+l1=list(v=v1,f=f1);l1
+l1$v
+l1$f
+length(l1)
+```
+
+### Matrices
+
+1.  Crea una matriz diagonal con los elementos del vector v1. Llámala V.
+2.  Convierte el vector v3 en una matriz X de dimensiones 2x5. Introduce los elementos por columnas.
+3.  Convierte el vector v3 en una matriz Y de dimensiones 2x5. Introduce los elementos por filas.
+4.  Transpón la matriz X y calcula su dimensión. Llámala Z. Calcula también directamente el número de filas y de columnas.
+5.  Añade una columna a la matriz Z con la secuencia de números del 1 al número de filas. Llámala también Z.
+
+```{r}
+V=diag(v1);V
+X = matrix(v3,ncol=5,nrow=2);X
+Y = matrix(v3,byrow=TRUE,ncol=5,nrow=2);Y
+Z=t(X);dim(Z);nrow(Z);ncol(Z)
+Z = cbind(Z,1:nrow(Z)); Z
+ZZ=rbind(Z,1:ncol(Z));ZZ
+```
+
+1.  Crea un array llamado 'ar' de dimensión 3, útil por ejemplo, para ubicar información de un gráfico tridimensional. Dimensión x: 2, dimensión y:2, dimension z:1. Visualízalo
+
+```{r}
+ar=array(dim=c(2,2,2))
+ar[,,1]=2:5
+ar
+```
+
+### data.frame y tibble
+
+1.  Convierte a data frame la nueva matriz Z y añade una columna con la secuencia del alfabeto desde la 'a' hasta el número de filas. Llámala Z_df.
+2.  Asigna nombres a las columnas: V1, V2, ...
+3.  Crea una nueva columna en Z_df llamada V4 e introduce valores faltantes.
+4.  Cuenta cuántos valores faltantes tienes en el data frame Z_df.
+5.  Crea una nueva fila e introduce valores 0.
+6.  Transforma en tibble el data frame Z_df. Llámalo Z_t.
+
+```{r}
+Z_df = data.frame(Z);Z_df
+colnames(Z_df)=paste0("V",1:ncol(Z_df)); Z_df; dimnames(Z_df)[[2]];colnames(Z_df)
+Z_df$V4=NaN; Z_df
+sum(is.na(Z_df)); which(is.na(Z_df))
+Z_df=rbind(Z_df,0); Z_df
+
+library(tidyverse)
+Z_t=tibble(Z_df);Z_t; as.tibble(Z_df)
+```
+
+1.  Verifica que `Loblolly` es un data.frame.
+2.  Verifica que `mydata` es un tibble.
+
+```{r}
+class(Loblolly)
+is.data.frame(Loblolly)
+
+class(mydata)
+is_tibble(mydata)
+is.data.frame(mydata)
+```
+
+## Selección y operadores lógicos
+
+### Vectores
+
+1.  Selecciona el elemento 2 del vector v1.
+2.  Elimina el elemento 2 del vector v1.
+3.  Calcula si elemento 2 del vector v1 es mayor que el elemento 5 del vector v2.
+4.  Selecciona los elementos del vector v3 que son mayores a 50.
+5.  Selecciona los elementos del vector v3 que son iguales a 55.
+6.  Selecciona los elementos del vector v3 que NO son iguales a 55.
+7.  Identifica los índices de los elementos del vector v3 que son mayores a 50. Asígnalos a un vector llamado v3_50 y utilízalo para seleccionar esos elementos en el vector v3.
+8.  Identifica qué posición ocupa el menor elemento de v1. Obtén el valor.
+9.  Identifica qué posición ocupa el mayor elemento de v1. Obtén el valor.
+10. Selecciona los elementos del vector v3 que son mayores a 20 y menores a 80.
+11. Selecciona los elementos del vector v3 que son menores a 20 o mayores a 80.
+12. Selecciona una muestra al azar (SIN reemplazamiento) del vector v3 con 3 elementos.
+13. Identifica qué posición ocupan los elementos del vector v3 que coinciden con alguno de c(5,35,75).
+
+```{r}
+v1[2]
+v1[-2]; v1[-c(2,3)]
+v1[2]>v2[5]
+v3[v3>50]
+v3[v3==55]
+v3[v3!=55]
+v3_50 = which(v3>50) ; v3_50; v3[v3_50]
+which.min(v1); v1[which.min(v1)]
+which.max(v1); v1[which.max(v1)]
+v3[v3>20 & v3<80]
+v3[v3<20 | v3>80]
+set.seed(1234)
+sample(v3,3,replace=FALSE)
+which(v3 %in% c(5,35,75))
+```
+
+### Listas, matrices y data.frame
+
+1.  Selecciona el primer elemento de la lista l1.
+2.  Excluye el segundo elemento de la lista l1.
+3.  Calcula la dimensión de cada uno de los elementos de la lista l1.
+
+```{r}
+l1[[1]]; l1$v
+l1[[-2]]
+length(l1$v); length(l1$f)
+```
+
+1.  Selecciona el elemento en la fila 1 y la columna 3 de la matriz X.
+2.  Calcula con un operador lógico si el elemento en la fila 1 y la columna 3 es mayor que el de la fila 2 y la columna 1 en la matriz Y.
+3.  Selecciona la columna 2 de la matriz Z.
+4.  Elimina la fila 2 y la columna 3.
+5.  Selecciona los dos primeros elementos de la fila 3 de la matriz Z.
+
+```{r}
+X[1,3]
+X[1,3]>Y[2,1]
+Z[,2]
+Z[-2,-3]
+Z[3,1:2]
+```
+
+1.  Selecciona la columna 2 del data frame Z_df, tanto por su indicador como por su nombre.
+2.  Sustituye los registros 2, 4 y 5 de la columna V4 en Z_df por los valores 10, 20 y 30 respectivamente. Guárdalo en un nuevo data.frame llamado Z_f. Muestra el resultado.
+3.  Elimina las filas que tengan valores faltantes en la columna V4.
+
+```{r}
+Z_df[,2];Z_df$V2
+Z_df[c(2,4,5),4] = c(10,20,30); Z_df
+Z_f = Z_df[!is.na(Z_df$V4),];Z_f
+```
+
+### Tibbles
+
+1.  Con el tibble `mydata`, selecciona las columnas `ws`, `wd` y `nox`. Al nuevo tibble seleccionado, llámalo `mydata_sel` y visualiza las primeras filas.
+
+```{r}
+cols=c("ws","wd","nox")
+mydata_sel = mydata[cols]
+head(mydata_sel)
+
+# selección por número de columna
+head(mydata[2:4])
+```
+
+1.  Define un data frame a partir de las columnas `ws`, `wd` y `nox`, en el tibble `mydata`, y llámalo `mydata_df`. Verifica que es un data.frame.
+
+```{r}
+cols=c("ws","wd","nox")
+mydata_df = as.data.frame(mydata[cols])
+is.data.frame(mydata_df)
+```
+
+## Álgebra
+
+### Vectores
+
+1.  Calcula el máximo valor de v1.
+2.  Calcula el mínimo valor de v1.
+3.  Ordena de menor a mayor el vector v1.
+4.  Ordena de mayor a menor el vector v1.
+5.  Identifica los elementos del vector v1 que son divisibles por 2. Muéstralos.
+6.  Multiplica el vector v2 por 2.
+7.  Calcula la suma de v2 y v3.
+8.  Calcula el producto de los elementos de v2 y v3.
+9.  Calcula el producto interno de v2 y v3.
+10. Si x1=c(1,2,3) y x2=c(2,3,4) son dos puntos en $R^3$, calcula la distancia entre ellos.
+
+```{r}
+max(v1)
+min(v1)
+sort(v1)
+sort(v1,decreasing=TRUE)
+pares=(v1%%2==0); v1[pares]
+v2*2
+v2+v3
+v2*v3
+v2%*%v3;sum(v2*v3)
+x1=c(1,2,3) ; x2=c(2,3,4); (x1-x2)%*%(x1-x2)
+```
+
+### Matrices
+
+Considera las matrices A y B definidas por:
+
+```{r}
+A=matrix(c(0,0.5,0.5,0.5,0,0.5,0.5,0.5,0),ncol=3,byrow=TRUE)
+B=matrix(c(0.1,0.5,0.2,0.5,0.1,1,0.5,0.5,0.2),ncol=3,byrow=TRUE)
+A;B
+```
+
+1.  Calcula la dimensión de A.
+2.  Suma las matrices A y B
+3.  Multiplica los elementos de A con sus homólogos en B
+4.  Divide los elementos de A por sus homólogos en B.
+5.  Multiplica A por B (producto matricial).
+6.  Eleva al cubo A.
+7.  Resuelve la ecuación Ax=I.
+8.  Resuelve la ecuación Ax=b, para b=c(1,2,3), y verifica la ecuación.
+9.  Calcula los valores y vectores propios de A. Verifica que $vect_p \cdot diag(val_p) \cdot t(vect_p)=A$
+10. Verifica que la traza de A (suma de la diagonal) es igual a la suma de los valores propios, y que el determinante es igual al producto de estos.
+11. Calcula el rango de A sabiendo que es igual al número de valores propios distintos de cero.
+12. Extrae la matriz triangular inferior de A y también la superior.
+13. Verifica si la matriz A es simétrica.
+14. Suma los valores de A por filas. Y también por columnas.
+15. Sabiendo que el rango de una matriz es igual al rango de su descomposición QR, calcula el rango de A.
+
+```{r}
+dim(A)
+A+B
+A*B
+A/B
+A%*%B
+A%*%A%*%A; library(matrixcalc); matrix.power(A,3) #install.packages("matrixcalc")
+solve(A)
+b=c(1,2,3);x=solve(A,b); x; x%*%A; b
+sol=eigen(A);sol; v=sol$values; vec=sol$vectors; vec %*% diag(v) %*% t(vec) - A
+sum(diag(A)); sum(v); det(A); prod(v)
+A %*% vec[1,]; v[1]*vec[1,]
+sum(v!=0)
+lower.tri(A)*A
+upper.tri(A)*A
+A;isSymmetric(A)
+apply(A,1,sum); apply(A,2,sum)
+A[1,]%*%A[2,]
+qr(A)$rank
+```
+
+## Funciones
+
+Para definir una función basta utilizar la sintaxis siguiente:
+
+    nombre_funcion = function(argumentos){
+      cuerpo
+      return(output)
+    }
+
+1.  Crea una función que calcule y devuelva el área de un círculo de radio 'r' (que se introduce como argumento). El área ha de estar redondeada a dos decimales. Pruébala.
+
+```{r}
+# Área del cuadrado
+area_circulo=function(r){
+  area=pi*r^2
+  return(round(area,2))
+}
+area_circulo(4)
+```
+
+1.  Crea una función que simule 'n' valores de una distribución Uniforme(a,b), introduciendo también a y b como argumentos, y devuelva una lista con la suma, el valor máximo y el valor mínimo simulados.
+
+```{r}
+resume_unif=function(n,a,b){
+  u=runif(n,a,b)
+  suma=sum(u)
+  maximo=max(u)
+  minimo=min(u)
+  return(list(suma=suma,max=maximo,min=minimo))
+}
+resume_unif(10,1,2)
+```
+
+### Condiciones
+
+Para incorporar condiciones podemos utilizar:
+
+-   `ifelse()` si queremos ejecutar dos acciones simples en función de si se da o no cierta condición;
+-   `if(){} else{}`, si queremos ejecutar varias acciones cuando se da y cuando no se da cierta condición;
+-   `if(){} else if{} else{}`, cuando se pueden dan varias alternativas en la condición propuesta (no solo verdadero/falso).
+
+1.  Simula un valor uniforme(0,1). Crea una variable que tome el valor 0 si dicho valor está por debajo de 0.5 (o es igual) y 1 si está por encima. Muestra el valor simulado (redondeado a 2 decimales) y el creado.
+
+```{r}
+u=runif(1)
+x=ifelse(u<=0.5,0,1)
+cat(paste("Valor simulado:",round(u,2)))
+cat(paste("\n Valor creado:",x))
+
+```
+
+1.  Construye una función llamada 'tiempo' que simule un valor de temperatura entre -10º y 45º centígrados y redondéalo a número entero. Muestra en pantalla el mensaje "La temperatura actual es de ... grados centígrados". Si dicha temperatura es inferior a 10º, añade "Hoy hace fresco", si está entre 10º y 25º añade "Hoy está agradable", y si está por encima de 25º, añade "Hoy hace calor".
+
+```{r}
+tiempo=function(){
+  t=round(runif(1,-10,45))
+  cat(paste("La temperatura actual es de",t,"grados centígrados. \n"))
+  if(t<10)
+    cat("Hoy hace fresco")
+  else if (t<25)
+    cat("Hoy está agradable")
+  else
+    cat("Hoy hace calor")
+}
+
+tiempo()
+```
+
+1.  Construye una función que simule 'n' valores 'u' de una Un(0,1). Utiliza otro argumento que será un vector 'v' con dos números secuenciados entre 0 y 1. Genera 'n' valores 'x' a partir de ellos de modo que si el valor uniforme correspondiente es menor o igual que v1, 'x' tome el valor "1", si es menor o igual que v2 (y mayor que v1) tome el valor "2" y en otro caso tome el valor "3". Devuelve 10 valores uniformes 'u' y creados 'x', para un valor dado de 'v', en una matriz de dos columnas convenientemente etiquetadas. Llama a la función 'simulador_3cat'.
+
+```{r}
+simulador_3cat = function(n,v){
+u=runif(n)
+x=1*(u<=v[1])+2*(u>v[1] & u<v[2])+3*(u>v[2])
+return(x)
+}
+
+simulador_3cat(10,c(0.3,0.6))
+```
+
+### Bucles
+
+Los bucles se utilizan para ciclar acciones. Existen de dos tipos:
+
+-   `for(indice in secuencia){ acciones }` el índice es el que rige el número de repeticiones/ciclos a realizar;
+-   `while(condicion){ acciones }`, donde es la condición, si es verdadera, la que provoca que se ejecuten las acciones.
+
+Además, hay comandos que nos permiten suspender la ejecución de un bucle si se da alguna condición extraordinaria, como `break`, o pasar a la siguiente iteración, como `next`.
+
+1.  Programa una función llamada `quediaeshoy` en la que muestres por pantalla, para cada uno de los días de la semana, un mensaje que diga "Hoy es ...." sustituyendo los puntos suspensivos por el día de la semana que corresponda.
+
+```{r}
+quediaeshoy = function(){
+dias_semana=c("lunes","martes","miércoles","jueves","viernes","sábado","domingo")
+
+for(dias in dias_semana)
+  cat(paste("\n Hoy es",dias))
+}
+
+quediaeshoy()
+```
+
+1.  Programa ahora la funcion `quediaeshoy_2` en la que muestrees al azar un día cualquiera del mes (entre 1 y 30), lo muestres en pantalla (con el mensaje "Por azar llegaremos hasta el día ..."), empieces a anunciar el día que es desde el día 1 (con el mensaje "Hoy es día ..."), y lo sigas haciendo hasta llegar al día muestreado.
+
+```{r}
+quediaeshoy_2 = function(){
+dias_mes=1:30
+dia = sample(dias_mes,1)
+cat(paste("Por azar llegaremos hasta el día",dia))
+dia_hoy = 0. # inicialización
+while(dia_hoy < dia){
+  dia_hoy=dia_hoy+1. # corre el contador
+  cat(paste("\n Hoy es",dia_hoy))
+    }
+}
+
+quediaeshoy_2()
+```
+
+1.  Reutiliza la función anterior, ahora añadiendo una condición extra: si llegas al día 10 para anunciarlo, inmediatamente dejas de hacer avanzar los días. Será la función `quediaeshoy_3`. Verifica que funciona correctamente simulando las veces que haga falta.
+
+```{r}
+quediaeshoy_3 = function(){
+dias_mes=1:30
+dia = sample(dias_mes,1)
+cat(paste("Por azar llegaremos hasta el día",dia,"si es menor a 10."))
+dia_hoy = 0
+while(dia_hoy < dia){
+  dia_hoy=dia_hoy+1
+  if(dia_hoy==10){
+    break
+  }
+  else{
+  cat(paste("\n Hoy es",dia_hoy))
+  }
+  }
+}
+
+quediaeshoy_3()
+```
+
+1.  Reutiliza las funciones previas para mostrar en qué día del mes estamos, hasta llegar a un día muestreado al azar, y salte el día 10 si lo encuentra en el camino. Será la función `quediaeshoy_4`. Verifica que funciona correctamente simulando las veces que haga falta.
+
+```{r}
+quediaeshoy_4 = function(){
+dias_mes=1:30
+dia = sample(dias_mes,1)
+cat(paste("Por azar llegaremos hasta el día",dia,"saltando el 10."))
+dia_hoy=0
+while(dia_hoy < dia){
+  dia_hoy=dia_hoy+1
+  if(dia_hoy==10) next
+  else{
+  cat(paste("\n Hoy es",dia_hoy))
+   }
+  }
+}
+
+quediaeshoy_4()
+```
+
+### Listas
+
+Cuando programamos una función y la queremos aplicar a cada uno de los elementos de una lista, tenemos las funciones `lapply` (que devuelve los resultados en una lista) y `sapply` (que devuelve un vector).
+
+1.  Calcula la media y la suma de los elementos en la lista l2 conformada por dos vectores numéricos `a1=1:6`, `a2=10:0`.
+
+```{r}
+l2=list(a1=1:6,a2=10:0)
+lapply(l2,mean)
+sapply(l2,sum)
+```
+
+### Matrices y data.frames
+
+Cuando programamos una función y la queremos aplicar a cada una de las filas o columnas de una matriz, un array o un data.frame, tenemos las funciones `apply` (que puede aplicar a filas/columnas), y `lapply` (que solo aplica a columnas).
+
+1.  Calcula el valor medio de las columnas de `mydata_df`, excluyendo los valores faltantes (prueba también a no excluirlos para ver el resultado). Utiliza `colMeans`.
+2.  Haz la misma operación con `apply`, donde los argumentos - columnas por ejemplo, pueden tener distinta dimensión.
+3.  Haz la misma operación con `lapply` (que solo funciona para columnas) y verifica que devuelve una lista.
+4.  Transforma a vector el resultado que obtuviste al aplicar `lapply`.
+
+```{r}
+colMeans(mydata_df)
+colMeans(mydata_df,na.rm=TRUE)
+
+apply(mydata_df,2,mean,na.rm=TRUE)
+apply(mydata_df,2,mean,na.rm=TRUE)
+
+lapply(mydata_df,mean,na.rm=TRUE)
+unlist(lapply(mydata_df,mean,na.rm=TRUE))
+```
+
+1.  En el data.frame `Loblolly`, utiliza la variable `Seed` para calcular la media de las restantes variables en cada una de las categorías.
+
+```{r}
+lapply(mydata_df,mean,na.rm=TRUE)
+
+```
+
+## Referencias
+
+[Curso: R para análisis de datos](https://bookdown.org/ddiannae/curso-rdata/)
+
+[R para principiantes](https://bookdown.org/jboscomendoza/r-principiantes4/introduccion-que-es-r-y-para-que-es-usado.html)
+
+[Functions](http://adv-r.had.co.nz/Functions.html)

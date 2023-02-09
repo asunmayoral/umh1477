@@ -1,0 +1,1409 @@
+---
+title: "Sintaxis Unidad 04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r librerias, echo = FALSE, warning = FALSE, message = FALSE}
+# librerías
+library(tidyverse)
+library(diagram)
+library(simmer)
+library(simmer.bricks)
+library(simmer.plot)
+library(parallel)
+```
+
+### Sistema de vida útil de un satélite {#excmtc001}
+Supongamos que la vida útil $T$ de un satélite de gran altitud es una variable aleatoria exponencial de tasa $\mu$ en meses, $Exp(\mu)$, de forma que una vez que falla sigue fallando para siempre, ya que no es posible repararlo. Consideramos el proceso $X_t = 1$ si el satélite está operativo en el momento $t$, y 0 en caso contrario. 
+
+La matriz de transición viene dada pues por:
+
+$$P(t) = 
+\begin{pmatrix}
+1 & 0\\
+1- e^{-\mu t} & e^{-\mu t} 
+\end{pmatrix}$$
+
+
+```{r 05-002, echo=FALSE, fig.cap ="Diagrama de tasas para el tiempo de vida del Satélite"}
+estados <- c("0", "1")
+nestados <- length(estados)
+
+M <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R <- as.data.frame(M)
+
+R[[2,1]] <- "mu" 
+
+pp <- plotmat(t(R),  pos = 2, curve = 0.2, name = estados,
+              lwd = 1, box.lwd = 2, cex.txt = 0.8,
+              box.type = "circle", box.prop = 0.5, arr.type = "triangle",
+              arr.pos = 0.55, self.cex = 0.6,  
+              shadow.size = 0.01, prefix = "", endhead = FALSE, main = "")
+```
+
+
+### Sistema del viajante {#excmtc002}
+Un vendedor vive en la ciudad A y es responsable de las ciudades A, B y C. El tiempo que pasa en cada ciudad es aleatorio. Tras un estudio, se ha determinado que la cantidad de tiempo consecutivo que pasa en una ciudad cualquiera sigue una variable aleatoria con distribución exponencial, cuya media de tiempo de estancia depende de la ciudad. En su ciudad natal pasa un tiempo medio de dos semanas, en la ciudad B pasa un tiempo medio de una semana, y en la ciudad C pasa un tiempo medio de una y media. Cuando sale de la ciudad A, lanza una moneda para determinar a qué ciudad va a continuación; cuando sale de la ciudad B o C, lanza dos monedas de manera que hay un 75% de posibilidades de volver a A y un 25% de posibilidades de ir a la otra ciudad. Sea $X_t$ una variable aleatoria que denota la ciudad en la que se encuentra el vendedor en el momento $t$, de forma que toma el valor 0 si está en A, el valor 1 si está en B, y 2 si está en C.
+
+$$P = 
+\begin{pmatrix}
+0 & 0.5 & 0.5\\
+0.75 & 0 & 0.25\\
+0.75 & 0.25 & 0
+\end{pmatrix}$$
+
+
+
+```{r 05-003}
+estados <- c("0", "1", "2")
+nestados <- length(estados)
+
+P <- matrix(nrow = nestados, ncol = nestados, 
+            data = c(0, 0.5, 0.5, 0.75, 0, 0.25, 0.75, 0.25, 0), 
+            byrow = 3)
+r <- c(1/2, 1, 1/1.5)
+
+R <- r*P
+R
+```
+
+
+```{r 05-004, echo=FALSE, fig.cap ="Diagrama de tasas para el proceso del vendedor"}
+estados <- c("A", "B", "C")
+nestados <- length(estados)
+M <- R
+
+pp <- plotmat(t(R),  pos = 3, curve = 0.2, name = estados,
+              lwd = 1, box.lwd = 2, cex.txt = 0.8,
+              box.type = "circle", box.prop = 0.5, arr.type = "triangle",
+              arr.pos = 0.55, self.cex = 0.6,  
+              shadow.size = 0.01, prefix = "", endhead = FALSE, main = "")
+```
+
+```{r 05-010}
+TSIM_viajante <- function(tasaA, tasaB, tasaC, tfin)
+{
+  # Parámetros de la función
+  # =========================
+  # tasaA: tasa de permanencia en A
+  # tasaB: tasa de permanencia en B
+  # tasaC: tasa de permanencia en C
+  # tfin: tiempo de funcionamiento del sistema
+  
+  # inicialización de parámetros del sistema 
+  tiempo = tsis = ciudad = vector()
+  # Probabilidades de salto. Fijamos la primera ya que la otra es complementaria
+  pA <- 0.5 # de A a B. De A a C es  1-pA
+  pB <- 0.75 # de B a A. De B a C es  1-pB
+  pC <- 0.75 # de C a A. De C a B es  1-pC
+  
+  # estado inicial del sistema
+  i <- 1
+  ciudad[i] <- "A"
+
+  # Primer tiempo de estancia
+  tiempo[i] = rexp(1, tasaA)
+  tsis[i] <- tiempo[i]
+  # Saltamos de la ciudad A
+  uniforme <- runif(1)
+  ifelse(uniforme <= pA, ciudad[i+1] <- "B", ciudad[i+1] <- "C")
+      
+  # Bucle de simulación
+  while(tsis[i] <= tfin)
+  {
+    i<- i + 1
+    uniforme <- runif(1)
+    if(ciudad[i] == "A")
+      {
+        # Calculamos tiempo de permanencia
+        tiempo[i] <- rexp(1, tasaA)
+        # Actualizamos y valoramos si hemos alcanzado el tiempo límite
+        tsis[i] = tsis[i-1] + tiempo[i]
+        if(tsis[i] > tfin){
+            tiempo[i] <- tfin - tsis[i-1] 
+            tsis[i] = tsis[i-1] + tiempo[i]
+            break
+          }
+        # Si no hemos alcanzado el límite realizamos un nuevo salto
+        ifelse(uniforme <= pA, ciudad[i+1] <- "B", ciudad[i+1] <- "C")
+      }
+    if(ciudad[i] == "B")
+      {
+        # Calculamos tiempo de permanencia
+        tiempo[i] <- rexp(1, tasaB)
+        # Actualizamos y valoramos si hemos alcanzado el tiempo límite
+        tsis[i] = tsis[i-1] + tiempo[i]
+        if(tsis[i] > tfin){
+            tiempo[i] <- tfin - tsis[i-1] 
+            tsis[i] = tsis[i-1] + tiempo[i]
+            break
+          }
+        # Si no hemos alcanzado el límite realizamos un nuevo salto
+        ifelse(uniforme <= pB, ciudad[i+1] <- "A", ciudad[i+1] <- "C")
+      }  
+    if(ciudad[i] == "C")
+      {
+        # Calculamos tiempo de permanencia
+        tiempo[i] <- rexp(1, tasaC)
+        # Actualizamos y valoramos si hemos alcanzado el tiempo límite
+        tsis[i] = tsis[i-1] + tiempo[i]
+        if(tsis[i] > tfin){
+            tiempo[i] <- tfin - tsis[i-1] 
+            tsis[i] = tsis[i-1] + tiempo[i]
+            break
+          }
+        # Si no hemos alcanzado el límite realizamos un nuevo salto
+        ifelse(uniforme <= pC, ciudad[i+1] <- "A", ciudad[i+1] <- "C")
+      }
+  }
+  # Devolvemos resultados del sistema 
+  ciudad <- factor(ciudad)
+  res <- tibble(tiempo, ciudad, tsis)
+  return(res)
+}
+```
+
+Supongamos que estamos interesados en aproximar el comportamiento del vendedor durante el próximo año (52 semanas) para poder contestar a las preguntas siguientes:
+
+-   Proporción de tiempo que el vendedor pasa en cada ciudad.
+-   Número de ocasiones en que visita cada ciudad.
+
+Simulamos pues el sistema y contestamos a las preguntas planteadas:
+
+```{r 05-011}
+tasaA <- 1/2
+tasaB <- 1/1
+tasaC <- 2/3
+tfin <- 52
+simulacion <- TSIM_viajante(tasaA, tasaB, tasaC, tfin)  
+# Análsis del sistema
+simulacion %>% 
+  group_by(ciudad) %>% 
+  summarise(visita = n(), estancia = sum(tiempo)) %>%
+  mutate(proporcion = estancia/52)
+```
+
+### Sistema vida útil de una máquina {#excmtc005}
+
+```{r 05-005, echo=FALSE, fig.cap ="Diagrama de tasas para el sistema de una máquina"}
+estados <- c("0", "1")
+nestados <- length(estados)
+
+M <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R <- as.data.frame(M)
+
+R[[1,2]] <- "lambda" 
+R[[2,1]] <- "mu" 
+
+pp <- plotmat(t(R),  pos = 2, curve = 0.2, name = estados,
+              lwd = 1, box.lwd = 2, cex.txt = 0.8,
+              box.type = "circle", box.prop = 0.5, arr.type = "triangle",
+              arr.pos = 0.55, self.cex = 0.6,  
+              shadow.size = 0.01, prefix = "", endhead = FALSE, main = "")
+```
+
+
+
+```{r 05-006}
+# Tiempo de funcionamiento de una máquina
+TSIM_one_machine <- function(tasafun, tasarep, tfin)
+{
+  # Parámetros de la función
+  # =========================
+  # tasafun: tasa de funcionamiento
+  # tasarep: tasa de reparación
+  # tfin: tiempo de funcionamiento del sistema
+  
+  # inicialización de parámetros del sistema 
+  tfun = trep = nfun = nrep = tsis = vector()
+  # estado inicial del sistema
+  i <- 1
+  tfun[i] = trep [i] = nfun[i] = nrep[i] = 0
+  tsis[i] <- tfun[i] + trep[i]
+  
+  
+  # Bucle de simulación
+  while(tsis[i] <= tfin)
+  {
+    i<- i + 1
+    # Máquina en funcionamiento
+    nfun[i] = nfun[i-1] + 1
+    tfun[i] = rexp(1, tasafun) 
+    tsis[i] = tsis[i-1] + tfun[i]
+    trep[i] = 0 #Actualizamos estos dos parámetros ya que no hemos entrado en reparación
+    nrep[i] = nrep[i-1]
+    if(tsis[i] > tfin) {
+      # adaptamos valores para quedarnos en los 365 días
+      tfun[i] <- tfin - tsis[i-1]
+      tsis[i] <- tsis[i-1] + tfun[i]
+      break
+      }
+    # Máquina en reparación
+    nrep[i] = nrep[i-1] + 1
+    trep[i] = rexp(1, tasarep)
+    tsis[i] = tsis[i] + trep[i]
+    if(tsis[i] > tfin) {
+    # adaptamos valores para quedarnos en los 365 días
+      trep[i] <- tfin - tsis[i-1] 
+      tsis[i] = tsis[i] + trep[i]
+      break
+      }
+  }
+  res <- tibble(tfun, nfun, trep, nrep, tsis)
+  # Devolvemos resultados del sistema quitando la fila de inicialización
+  return(res[-1,])
+}
+```
+
+
+```{r 05-007}
+mu <- 1/60
+lambda <- 1/4
+simulacion <- TSIM_one_machine(mu, lambda, 365)
+simulacion
+```
+
+```{r 05-008}
+tiempos <- apply(simulacion[c(1,3)], 2, sum)
+tiempos
+```
+
+
+```{r 05-009}
+beneficio <- 100 * tiempos["tfun"] - 1500 * tiempos["trep"]
+beneficio
+```
+
+
+#### Análisis con simmer
+
+
+```{r 05-012}
+library(tidyverse)
+library(simmer)
+library(simmer.plot)
+library(simmer.bricks)
+library(parallel)
+set.seed(1234)
+```
+
+```{r 05-013}
+# Tasas de permanencia del sistema
+##################################
+lambda <- 1/4  # tasa reparación
+mu <- 1/60     # tasa funcionamiento
+
+# Sistema
+#################################################
+sistema.1m <- function(t, lambda, mu)
+{
+  # tarea dentro de sistema: reparación de las averías
+  reparar <- trajectory() %>%
+    # la máquina estropeada se asigna a un reparador
+    seize("reparador", amount = 1) %>%              
+    # el tiempo de reparación es aleatorio
+    timeout(function() rexp(1, lambda)) %>%   
+    # la máquina ya ha sido reparada
+    release("reparador", amount = 1)               
+
+  # Configuración del sistema 
+  #################################################
+  simmer() %>%
+    # Se definen los recursos: un único reparador y cola infinita
+    add_resource("reparador", capacity = 1) %>%           
+    # Simulador de los tiempos entre averías, dirigidas a la trayectoria "reparar"
+    add_generator("averia", reparar, function() rexp(1, mu)) %>% 
+    # Tiempo funcionamiento del sistema
+    run(until = t)     
+}
+
+### Simulación del sistema durante 365 días
+operar <- sistema.1m(365, 1/4, 1/60)
+```
+
+
+```{r 05-014}
+reparacion = get_mon_arrivals(operar)
+reparacion
+```
+
+
+```{r 05-015}
+recursos = get_mon_resources(operar)
+recursos
+```
+
+
+```{r 05-016}
+tiempo_reparacion <- sum(reparacion$activity_time)
+propor <- round(100*(1-(tiempo_reparacion/365)), 2)
+propor
+```
+
+```{r}
+sum(recursos$server==1)
+nrow(reparacion)
+```
+
+```{r 05-017}
+(365-tiempo_reparacion)*100 - tiempo_reparacion*1500
+```
+
+
+```{r 05-018}
+# lanzamos 'nreplicas' de la cadena, que se almacenan en una lista
+nreplicas <- 500
+envs <- mclapply(1:nreplicas, function(i){
+  sistema.1m(365, 1/4, 1/60) %>%
+    wrap()},mc.set.seed = FALSE)
+```
+
+
+```{r 05-019}
+# guardamos todas las llegadas en formato 'tibble'
+simulaciones <- as_tibble(get_mon_arrivals(envs))
+
+# agrupamos por 'replication' para calcular los descriptivos de interés en cada réplica
+salida <- simulaciones %>% 
+  group_by(replication) %>% 
+  # Calculamos los descriptivos por cada réplica
+  summarise(nreparaciones = n(), 
+            tiempoparada = sum(activity_time)) %>% 
+  # Calculamos las estimaciones Monte-Carlo con los descriptivos de las réplicas
+  summarise(mmedia_nrepara = mean(nreparaciones),
+            #min_nrepara = min(nreparaciones),
+            #max_nrepara = max(nreparaciones),
+            media_taveria = mean(tiempoparada),
+            #q25_taveria = quantile(tiempoparada, 0.25),
+            #q50_taveria = quantile(tiempoparada, 0.50),
+            #q75_taveria = quantile(tiempoparada, 0.75),
+            error_taveria = sd(tiempoparada)/sqrt(nreplicas),
+            ic.low=media_taveria-qnorm(0.975)*error_taveria,
+            ic.up=media_taveria+qnorm(0.975)*error_taveria
+            )
+salida
+```
+
+
+```{r 05-020}
+# número de días en funcionamiento vs número de días en reparación
+(365-salida$media_taveria)*100 - salida$media_taveria*1500
+```
+
+
+```{r 05-021}
+(365-salida$q75_taveria)*100 - salida$q75_taveria*1500
+(365-salida$q25_taveria)*100 - salida$q25_taveria*1500
+```
+
+
+### Mantenimiento de aronaves {#mantAeronaves}
+
+Una empresa de mantenimiento de aeronaves está interesada en el proceso de avería-reparación de cierto tipo de aviones. El tipo de avión de interés es un avión comercial a reacción con cuatro motores, dos en cada ala. Cuando un motor se enciende, el tiempo que se puede mantener en funcionamiento hasta que falla es una variable aleatoria exponencial con parámetro $\lambda$. Si el fallo se produce en vuelo, no puede haber reparación, pero el avión necesita al menos un motor en cada ala para funcionar correctamente y poder volar con seguridad. En concreto, la empresa está interesada en poder predecir la probabilidad de un vuelo sin problemas.
+
+Si denotamos por $X_L(t)$ y $X_R(t)$ el número de motores funcionando en el instante $t$ en el ala izquierda y el ala derecha respectivamente, podemos considerar el estado del sistema en el instante $t$ como $X_t = (X_L(t), X_R(t))$. Si asumimos que los fallos en los motores son independientes entre sí, podemos ver que el proceo $\{X_t, t \geq 0\}$ es una CMTC con espacio de estados:
+
+$$S = \{ (0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2,2) \}$$
+
+En esta situación, el avión sigue funcionando en el subconjunto de estados $S = \{ (1, 1), (1, 2), (2, 1), (2,2) \}$.
+
+Vamos a asumir (aunque no es real) que el sistema sigue funcionando, incluso cuando hay posibilidad de un accidente, hasta que llegamos al estado $(0, 0)$. 
+
+Codificamos:
+$$S = \{ 1 = (0, 0), 2 = (0, 1), 3 = (0, 2), 4 = (1, 0), 5 = (1, 1), 6 = (1, 2), 7 = (2, 0), 8 = (2, 1), 9 = (2,2) \}$$
+
+y asumimos que la media del tiempo hasta que un motor falla cuando está encendido es de 20 horas, es decir, $\lambda = 1/20$. A continuación hemos construido una función para simular el sistema descrito:
+
+
+
+```{r 05-022, echo=FALSE, fig.cap ="Diagrama de tasas para el sistema motores de aviones"}
+estados <- c("(0, 0)", "(0, 1)", "(0, 2)", "(1, 0)", 
+             "(1, 1)", "(1, 2)", "(2, 0)", "(2, 1)", "(2,2)")
+nestados <- length(estados)
+
+M <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R <- as.data.frame(M)
+
+R[[2,1]] <- "lambda" 
+R[[3,2]] <- "2*lambda" 
+R[[4,1]] <- "lambda" 
+R[[5,2]] <- "lambda" 
+R[[5,4]] <- "lambda" 
+R[[6,3]] <- "lambda" 
+R[[6,5]] <- "2*lambda"
+R[[7,4]] <- "2*lambda"
+R[[8,5]] <- "2*lambda"
+R[[8,7]] <- "lambda"
+R[[9,6]] <- "2*lambda"
+R[[9,8]] <- "2*lambda"
+
+pp <- plotmat(t(R),  pos = c(3,3,3), curve = 0, name = estados,
+              lwd = 1, box.lwd = 2, cex.txt = 0.8,
+              box.type = "circle", box.prop = 0.5, arr.type = "triangle",
+              arr.pos = 0.55, self.cex = 0.6,  
+              shadow.size = 0.01, prefix = "", endhead = FALSE, main = "")
+```
+
+
+```{r 05-023}
+TSIM_aviones <- function(tasa)
+{
+  # Parámetros de la función
+  # =========================
+  # tasa: tasa de fallo de un motor
+  
+  # Valores fijos del sistema
+  # codigos de motores funcionando obviando el estado inicial
+  codigo <- 1:8
+  # motores con fallo de acuerdo al código
+  motoresOFF <- c(4, 3, 2, 3, 2, 1, 2, 1)
+  
+  # inicialización de parámetros del sistema 
+  tiempo =  estado = fallos = vector()
+  i<-1
+  # Primer fallo
+  # Posibles estados de salto
+  saltos = c(codigo[6], codigo[8])
+  # tiempos asociados a cada fallo
+  simula = rexp(2, 2*tasa)
+  # Seleccionamos el salto
+  posicion = which.min(simula)
+  if(posicion == 1)
+  {
+    estado[i] <- saltos[posicion]
+    tiempo[i] <- simula[posicion] 
+    fallos[i] <- motoresOFF[saltos[posicion]]
+    # nuevo salto
+    i <- i + 1
+    saltos = c(codigo[3], codigo[5])
+    simula = c(rexp(1, tasa), rexp(1, 2*tasa))
+    posicion = which.min(simula)
+    if(posicion == 1)
+    {
+      estado[i] <- saltos[posicion]
+      tiempo[i] <- simula[posicion] 
+      fallos[i] <- motoresOFF[saltos[posicion]]
+      # dos últimos saltos
+      estado[i+1] <- 2; estado[i+2] <- 1
+      tiempo[i+1] <- rexp(1, 2*tasa); tiempo[i+2] <- rexp(1, tasa)
+      fallos[i+1] <- motoresOFF[estado[i+1]]; fallos[i+2] <- motoresOFF[estado[i+2]]
+    }
+    else
+    {
+      estado[i] <- saltos[posicion]
+      tiempo[i] <- simula[posicion] 
+      fallos[i] <- motoresOFF[saltos[posicion]]  
+      # dos últimos saltos
+      estado[i+1] <- 2; estado[i+2] <- 1
+      tiempo[i+1] <- rexp(1, tasa); tiempo[i+2] <- rexp(1, tasa)
+      fallos[i+1] <- motoresOFF[estado[i+1]]; fallos[i+2] <- motoresOFF[estado[i+2]]
+    }
+  }
+  else
+  {
+    estado[i] <- saltos[posicion]
+    tiempo[i] <- simula[posicion] 
+    fallos[i] <- motoresOFF[saltos[posicion]]
+    # nuevo salto
+    i <- i + 1
+    saltos = c(codigo[7], codigo[5])
+    simula = c(rexp(1, tasa), rexp(1, 2*tasa))
+    posicion = which.min(simula)
+    if(posicion == 1)
+    {
+      estado[i] <- saltos[posicion]
+      tiempo[i] <- simula[posicion] 
+      fallos[i] <- motoresOFF[saltos[posicion]]
+      # dos últimos saltos
+      estado[i+1] <- 2; estado[i+2] <- 1
+      tiempo[i+1] <- rexp(1, 2*tasa); tiempo[i+2] <- rexp(1, tasa)
+      fallos[i+1] <- motoresOFF[estado[i+1]]; fallos[i+2] <- motoresOFF[estado[i+2]]
+    }
+    else
+    {
+      estado[i] <- saltos[posicion]
+      tiempo[i] <- simula[posicion] 
+      fallos[i] <- motoresOFF[saltos[posicion]]  
+      # dos últimos saltos
+      estado[i+1] <- 2; estado[i+2] <- 1
+      tiempo[i+1] <- rexp(1, tasa); tiempo[i+2] <- rexp(1, tasa)
+      fallos[i+1] <- motoresOFF[estado[i+1]]; fallos[i+2] <- motoresOFF[estado[i+2]]
+    }    
+  }
+
+  # Devolvemos resultados del sistema 
+  res <- tibble(estado, tiempo, fallos)
+  return(res)
+}
+```
+
+
+```{r 05-024}
+set.seed(12)
+tasa <- 1/20
+sistema <- TSIM_aviones(tasa)
+sistema
+```
+
+
+```{r 05-025}
+# Tiempo de fallo
+Tfallo <- round(sum(sistema$tiempo[sistema$fallos <= 2]), 2)
+# Duración del vuelo
+td <- seq(0.1, 12, by = 0.1)
+prob <- vector()
+# Probabilidad viaje seguro
+for(i in 1:length(td))
+{
+  prob[i] <- ifelse(Tfallo >= td[i], 1, round(Tfallo/td[i], 3))
+}
+# Obtenemos el valor mínimo de tiempo para asegurar un viaje seguro
+limite <- min(td[which(prob != 1)])
+limite
+```
+
+
+```{r 05-026}
+nsim <- 1000
+Tfallo <- vector()
+# Repetición del sistema y calculo de tiempo 
+for(i in 1:nsim)
+{
+  sistema <- TSIM_aviones(tasa)
+  Tfallo[i] <- round(sum(sistema$tiempo[sistema$fallos <= 2]), 2)
+}
+# Estimador Monte-Carlo
+estimMC<- mean(Tfallo)
+# Duración del vuelo
+td <- seq(0.1, 20, by = 0.1)
+prob <- vector()
+# Probabilidad viaje seguro
+for(i in 1:length(td))
+{
+  prob[i] <- ifelse(estimMC >= td[i], 1, round(estimMC/td[i], 3))
+}
+# Obtenemos el valor mínimo de tiempo para asegurar un viaje seguro
+limite <- min(td[which(prob != 1)])
+limite
+```
+
+
+```{r 05-027, echo=FALSE, fig.cap ="Probabilidad de un viaje seguro"}
+res <- data.frame(td, prob)
+ggplot(res, aes(td, prob)) + 
+  geom_line() +
+  labs(x = "Duración del vuelo (en horas)", y = "Probabilidad viaje seguro")
+```
+
+
+### Cajero Bancario {#cajerobancario}
+
+
+Imaginemos que tenemos un cajero bancario al que los clientes acuden de acuerdo a un Proceso de Poisson de parámetro $\lambda$, es decir que las llegadas son aleatorias y se distribuyen según una distribución $Exp(\lambda)$. El sistema tiene capacidad $K$: 1 cliente atendido y $K-1$ en la cola de espera. Además, el tiempo de servicio del cajero tiene una distribución $Exp(\mu)$.
+
+En esta situación la variable $X_t$ que indica el número de sujetos en el sistema en el instante $t$ es una CMTC denominada cola $M/M/1/K$, donde $M$ hace referencia a los tiempos de llegada y servicio exponenciales, el $1$ hace referencia a la capacidad del servicio (sólo hay un cajero, luego sólo un cliente puede ser atendido en un instante dado), $K$ es la capacidad del sistema (o aforo total), y $S = \{0, 1, 2,...K \}$ el espacio de estados. Este tipo de sistemas son procesos de nacimiento y muerte con:
+
+```{=tex}
+\begin{eqnarray*}
+\lambda_i &=& \lambda, \quad 0 \leq i \leq K-1, \\
+\mu_i &=& \mu, \quad 1 \leq i \leq K,
+\end{eqnarray*}
+```
+donde el "nacimiento" y la "muerte" hacen referencia a la llegada y la salida del cajero respectivamente.
+
+
+```{r 05-028, echo=FALSE, fig.cap ="Diagrama de tasas para cola M/M/1/4."}
+estados <- c(0, 1, 2, 3, 4)
+nestados <- length(estados)
+
+M <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R <- as.data.frame(M)
+
+R[[1,2]] <- "lambda" 
+R[[2,1]] <- "mu" 
+R[[2,3]] <- "lambda" 
+R[[3,2]] <- "mu" 
+R[[3,4]] <- "lambda" 
+R[[4,3]] <- "mu" 
+R[[4,5]] <- "lambda"
+R[[5,4]] <- "mu"
+
+
+pp <- plotmat(t(R),  pos = 5, curve = 0.5, name = estados,
+              lwd = 1, box.lwd = 2, cex.txt = 0.8,
+              box.type = "circle", box.prop = 0.5, arr.type = "triangle",
+              arr.pos = 0.55, self.cex = 0.6,  
+              shadow.size = 0.01, prefix = "", endhead = FALSE, main = "")
+```
+
+
+```{r 05-029}
+# Sistema
+#################################################
+cola.MM1K <- function(t, lambda, mu, servidores, usuarios)
+{
+  # lambda: tasa de llegadas
+  # mu: tasa de servicio
+  # servidores: número de servidores
+  # usuarios: capacidad total del sistema
+  cola <- usuarios - servidores
+  
+  servicio <- trajectory() %>%
+    # empieza a ser atendido
+    seize("atendiendo", amount = 1) %>%   
+    # durante un tiempo exp(mu)
+    timeout(function() rexp(1, mu)) %>% 
+    # termina el servicio de atención
+    release("atendiendo", amount = 1)               
+
+  # Configuración del sistema 
+  #################################################
+  simmer() %>%
+    # se crean los recursos (servidores) y se dimensiona la cola
+    add_resource("atendiendo", capacity = servidores, queue_size = cola) %>%    
+    # se generan las llegadas de clientes según Exp(lambda)
+    add_generator("llegada", servicio, function() rexp(1, lambda)) %>% 
+    run(until = t)     
+}
+```
+
+
+Imaginemos que por la mañanas (de 8 a 15) las llegadas de clientes se producen con una tasa de 15 clientes/hora, mientras que el tiempo medio que el cliente permanece en el cajero es de 6 minutos. Expresada en minutos tendríamos una tasa de llegadas $\lambda = 15/60$, y una tasa de servicio $\mu = 1/6$. Se ha observado además que cuando la cola de espera es de tres clientes nadie más espera para hacer cola ($K = 4$). Analizamos el sistema de forma básica para una mañana cualquiera, es decir para un periodo de 7 horas (420 minutos).
+
+
+```{r 05-030}
+set.seed(12)
+### Simulación del sistema
+t=420; 
+lambda=15/60; mu=1/6
+servidores=1; usuarios=4
+cajero <- cola.MM1K(t, lambda, mu, servidores, usuarios)
+### Salidas del sistema
+cajero.df.res <- get_mon_resources(cajero)  # recursos (servidores)
+cajero.df.arr <- get_mon_arrivals(cajero)   # llegadas (clientes)
+
+# llegadas
+head(cajero.df.arr, n = 10)
+```
+
+```{r 05-032}
+# llegadas al sistema: número de clientes que han pasado por el cajero
+nsis <- nrow(cajero.df.arr);nsis
+# tiempo total de servicio
+tserver <- sum(cajero.df.arr$activity_time);tserver
+# proporción de tiempo que el sistema está ocupado (atendiendo o en espera)
+round(100*tserver/t,2)
+# porcentaje de clientes que se marcharon sin ser atendidos
+rechazados <- sum(cajero.df.arr$finished == FALSE)
+round(100*rechazados/nsis,2)
+# Tiempos de espera en cola para ser atendido
+tespera <- cajero.df.arr$end_time - cajero.df.arr$start_time - cajero.df.arr$activity_time
+# tiempo medio de espera en cola y desv.típica
+mean(tespera);sd(tespera)
+```
+
+
+
+```{r 05-034}
+head(cajero.df.res, n = 10)
+# Evolución del tamaño de la cola
+ggplot(cajero.df.res, aes(time, queue)) +
+  geom_step() +
+  scale_x_continuous(breaks = seq(0, 420, 60)) + 
+  labs(x = "Tiempo (en minutos)", y = "Tamaño de la cola")
+# Porcentaje de clientes en cola
+ggplot(cajero.df.res, aes(x = queue)) + 
+  geom_bar(aes(y = ..prop.. , group = 1)) + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Clientes en la cola", y = "Porcentaje")
+```
+
+
+```{r 05-035}
+# Réplicas del sistema
+nreplicas=500
+t=420; 
+lambda=15/60; mu=1/6
+servidores=1; usuarios=4
+
+envs <- replicate(nreplicas,cola.MM1K(t, lambda, mu, servidores, usuarios))
+# almacenamos análisis de llegadas del sistema
+simarrivals<-as_tibble(get_mon_arrivals(envs))
+
+salida<-simarrivals %>% 
+  group_by(replication) %>% 
+  # Resumen de las simualciones
+  summarise(clientes = n(), 
+            tiemposervicio = sum(activity_time),
+            proptiemposervicio = round(tiemposervicio/420, 2),
+            rechazados = clientes - sum(finished),
+            proprechazados = round(rechazados/clientes,2)) %>% 
+  summarise(media_clientes = mean(clientes),
+            media_tserver = mean(tiemposervicio),
+            media_ptserver = 100*mean(proptiemposervicio),
+            media_rechazados = mean(rechazados),
+            media_prechazados = 100*mean(proprechazados)
+            )
+salida
+```
+
+> Para comentar: ¿Qué conclusiones extraemos del análisis realizado? ¿Cómo valorarías la ocupación del sistema? ¿Qué ocurriría si añadimos un nuevo cajero y ampliamos la capacidad del sistema a 8 clientes?
+
+### Mantenimiento de máquinas {#excmtc007}
+
+El problema del mantenimiento de máquinas es muy habitual dentro de las CMTC. Supongamos que disponemos de $N$ máquinas que funcionan durante 24 horas seguidas y $M$ personas que pueden repararlas ($M \leq N$). Las máquinas son idénticas, y los tiempos de vida de las máquinas (tiempo hasta fallo o mantenimiento) son variables aleatorias independientes $Exp(\lambda)$. Cuando las máquinas fallan, son reparadas por orden de fallo (la primera que falla es la primera en ser reparada) por los $M$ reparadores. Cada máquina averiada necesita una y sólo una persona para repararla, y los tiempos de reparación se distribuyen como una $Exp(\mu)$; una vez reparada, la máquina continúa comportándose como una máquina nueva. Si $X_t$ es el número de máquinas estropeadas en el momento $t$, el proceso $\{X_t, t \geq 0\}$ es un proceso de nacimiento (avería) y muerte (reparación) con parámetros:
+
+```{=tex}
+\begin{eqnarray*}
+\lambda_i &=& \lambda \cdot (N-i), \quad 0 \leq i < N\\
+\mu_i &=& \mu \cdot i, \quad 0 < i \leq N \\
+\end{eqnarray*}
+```
+
+
+Supongamos el problema de mantenimiento de máquinas en el que tenemos 4 máquinas y 2 reparadores. El espacio de estados (número de máquinas estropeadas) viene dado por $S = \{0, 1, 2, 3, 4\}$.
+
+La empresa está interesada en saber:
+
+-   ¿Cuántas máquinas estarán en funcionamiento después de una semana?
+-   ¿Cuánto tiempo están funcionando a la vez las cuatro máquinas (en términos porcentuales)?
+-   ¿Cuánto tiempo de funcionamiento se pierde por averías?
+
+
+
+```{r 05-036, echo=FALSE, fig.cap ="Diagrama de tasas para el mantenimiento de máquinas"}
+estados <- c(0, 1, 2, 3, 4)
+nestados <- length(estados)
+
+M <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R <- as.data.frame(M)
+
+R[[1,2]] <- "4*lambda" 
+R[[2,1]] <- "mu" 
+R[[2,3]] <- "3*lambda" 
+R[[3,2]] <- "2*mu" 
+R[[3,4]] <- "2*lambda" 
+R[[4,3]] <- "3*mu" 
+R[[4,5]] <- "lambda"
+R[[5,4]] <- "4*mu"
+
+# library(diagram)
+pp <- plotmat(t(R),  pos = 5, curve = 0.5, name = estados,
+              lwd = 1, box.lwd = 2, cex.txt = 0.8,
+              box.type = "circle", box.prop = 0.5, arr.type = "triangle",
+              arr.pos = 0.55, self.cex = 0.6,  
+              shadow.size = 0.01, prefix = "", endhead = FALSE, main = "")
+```
+
+
+
+```{r 05-037}
+# Sistema
+#################################################
+mantenimiento <- function(t, lambda, mu, capacidad,K)
+{
+  # lambda: tasa de averías
+  # mu: tasa de reparación
+  # capacidad: reparadores
+  # K: máquinas
+  
+  # Trayectoria 
+  reparacion <- trajectory() %>%
+    seize("mecanico") %>%
+    # tiempos de reparación 
+    timeout(function() rexp(1,mu)) %>%
+    release("mecanico") 
+
+  # Configuración del sistema 
+  simmer() %>%
+    add_resource("mecanico", capacity = capacidad, queue_size = Inf) %>%
+    # simulación de averías para 4 máquinas
+    add_generator("machine", reparacion, function() rexp(K,lambda)) %>%
+    run(until = t)     
+}
+```
+
+```{r 05-037bis}
+# Sistema
+#################################################
+mantenimiento <- function(t, lambda, mu, capacidad,K)
+{
+  # lambda: tasa de averías
+  # mu: tasa de reparación
+  # capacidad: reparadores
+  # K: máquinas
+  
+  # Trayectoria 
+  reparacion <- trajectory() %>%
+    seize("mecanico") %>%
+    # tiempos de reparación 
+    timeout(function() rexp(1,mu)) %>%
+    release("mecanico") 
+
+  # Configuración del sistema 
+  simmer() %>%
+    add_resource("mecanico", capacity = capacidad, queue_size = Inf) %>%
+    # simulación de averías para 4 máquinas
+    add_generator("machine", reparacion, function() rexp(1,lambda*K)) %>%
+    run(until = t)     
+}
+```
+
+```{r 05-038}
+t=24*7 #  tiempo de simulación (en horas)
+lambda=1/72; mu=1/2
+capacidad=2 # nº reparadores
+K=4 # nº máquinas
+
+### Simulación del sistema
+sim <- mantenimiento(t, lambda,mu, capacidad,K)
+
+### Salidas del sistema
+sim.arr <- get_mon_arrivals(sim)
+sim.res <- get_mon_resources(sim)
+head(sim.arr, 10)
+head(sim.res, 10)
+```
+
+
+```{r 05-039}
+# última iteración del sistema
+tail(sim.res, 1)
+# las que están estropeadas
+tail(sim.res, 1)$system
+# las que están en funcionamiento
+4-tail(sim.res, 1)$system
+```
+
+
+```{r}
+# identificamos instantes en que todas las máquinas están operativas
+sel=which(sim.res$system==0)
+# calculamos todas las secciones de tiempo delimitadas por instantes en que se ha producido alguna actividad, junto con el final del periodo, t
+tiempos = diff(c(sim.res$time,t))
+# y sumamos las franjas en las que se ha mantenido el evento de interés, pasándolo a porcentaje
+sum(tiempos[sel])*100/t
+```
+
+
+```{r}
+# utilizamos la información en las llegadas maquinas.df.arr
+# tiempo total gastado en reparaciones (`activity_time`)
+t.repara <- sum(sim.arr$activity_time)
+# tiempo de esperas en cola
+t.cola <- sum(sim.arr$end_time-sim.arr$start_time-sim.arr$activity_time)
+# Porcentaje del tiempo total de funcionamiento en que han estado paradas las máquinas
+t.sinfun<- (t.repara+t.cola)*100/(4*t)
+round(t.sinfun,2)
+```
+
+
+```{r 05-041}
+nreplicas<-500 # réplicas para estimación MC
+t=24*7 #  tiempo de simulación (en horas)
+lambda=1/72; mu=1/2
+capacidad=2 # nº reparadores
+K=4 # nº máquinas
+
+envs <- mclapply(1:nreplicas, function(i){
+   mantenimiento(t, lambda,mu, capacidad,K)%>%
+    wrap()},mc.set.seed=FALSE)
+
+# almacenamos análisis de llegadas del sistema
+sim.arr<-as_tibble(get_mon_arrivals(envs))
+# almacenamos análisis de recursos del sistema
+sim.res<-as_tibble(get_mon_resources(envs))
+
+# y procedemos con los cálculos
+# número de máquinas operativas al final
+operativas=sim.res %>%
+  group_by(replication) %>%
+  summarize(n=4-tail(system,1))
+m=mean(operativas$n)
+error=sd(operativas$n)/sqrt(nreplicas)
+cat("\n Máquinas operativas después de una semana: ",m,"(error=",error,")")
+            
+# tiempo en funcionamiento todas las máquinas a la vez
+fun.todas = sim.res %>%
+  group_by(replication) %>%
+  mutate(dif=diff(c(time,t)),
+         system0=(system==0)*1) %>%
+  filter(system0==1) %>%
+  summarise(tiempos=sum(dif)*100/t)
+
+m=mean(fun.todas$tiempos)
+error=sd(fun.todas$tiempos)/sqrt(nreplicas)
+cat("\n % Tiempo en que han funcionado simultáneamente todas las máquinas: ",m,"% (error=",error,"%)")
+  
+# tiempo perdido en averías
+tpo.averias = sim.arr %>%
+  group_by(replication) %>%
+  mutate(parones=end_time-start_time) %>%
+  summarise(tpo.parones=sum(parones)*100/(4*t)) 
+
+m=mean(tpo.averias$tpo.parones)
+error=sd(tpo.averias$tpo.parones)/sqrt(nreplicas)
+cat("\n % Tiempo perdido por averías: ",m,"% (error=",error,"%)")
+
+```
+
+### Central telefónica {#centralTelefonica}
+
+Una centralita telefónica puede atender $K$ llamadas a la vez en un momento dado. Las llamadas llegan según un proceso de Poisson con tasa $\lambda$. Si la centralita ya está atendiendo $K$ llamadas cuando llega una nueva llamada, ésta se pierde. Si una llamada es aceptada, dura un tiempo $Exp(\mu)$ y luego termina. Todas las llamadas son independientes entre sí. Sea $X_t$ el número de llamadas que la centralita gestiona en el momento $t$.
+
+El proceso $\{X_t; t \geq 0\}$ es una CMTC con espacio de estados $S = \{0, 1, 2,...,K\}$ es un proceso de nacimiento y muerte que se denomina cola $M/M/K/K$, con:
+
+```{=tex}
+\begin{eqnarray*}
+\lambda_i &=& \lambda, \quad 0 \leq i \leq K-1 \\
+\mu_i&=& i\mu, \quad 0 < i \leq K,
+\end{eqnarray*}
+```
+
+```{r 05-042}
+# Sistema
+#################################################
+cola.MMKK <- function(t, lambda, mu, servidores, usuarios)
+{
+  # lambda: tasa de llegadas
+  # mu: tasa de servicio
+  # servidores: número de servidores
+  # usuarios: capacidad total del sistema
+  cola <- usuarios - servidores
+  
+  servicio <- trajectory() %>%
+    seize("atendiendo", amount = 1) %>%              
+    timeout(function() rexp(1, mu)) %>%   
+    release("atendiendo", amount = 1)               
+
+  # Configuración del sistema 
+  #################################################
+  simmer() %>%
+    add_resource("atendiendo", capacity = servidores, queue_size = cola) %>%           
+    add_generator("llegada", servicio, function() rexp(1, lambda)) %>% 
+    run(until = t)     
+}
+```
+
+
+## Análisis de transición {#CMTCF}
+
+
+```{r 05-050}
+matriz.prob.trans<- function(Rmat, ts, cal)
+{
+  # Algoritmo de uniformización para obtener P(t)
+  ################################################
+  
+  # Parámetros de la función
+  # Rmat: matriz de tasas de permanencia
+  # ts: instante de tiempo
+  # epsilon: error en la aproximación
+  # cal: forma de obtener r, con dos valores 1 = máximo, 2 = suma finita
+  epsilon <- 1e-05
+  # Paso 2. Cálculo de r
+  ris <- apply(Rmat, 1, sum)
+  rlimit=ifelse(cal == 1, max(ris), sum(Rmat))
+  # Paso 3. Cálculo de hat(P)
+  hatP <- Rmat/rlimit
+  diag(hatP) <- 1 - ris/rlimit
+  # Paso 4. Cálculo de matrices y vectores accesorios
+  rts <- rlimit*ts
+  A <- hatP
+  c <- exp(-rts)
+  B <- c*diag(nrow(Rmat))
+  suma <- c
+  k <- 1
+  # Bucle simulación
+  while(suma < (1- epsilon))
+  {
+    c <- c*rts/k
+    B <- B + c*A
+    A <- A%*%hatP
+    suma <- suma + c
+    k <- k + 1
+  }
+  return(round(B, 4))
+}
+```
+
+
+```{r 05-051}
+# Ejemplo
+R = matrix(c(0, 2, 3, 0, 4, 0, 2, 0, 0, 2, 0, 2, 1, 0, 3, 0), byrow = TRUE, ncol = 4)
+
+Pmat1<-matriz.prob.trans(R, 2, 1); Pmat1
+Pmat2<-matriz.prob.trans(R, 2, 2); Pmat2
+
+Pmat1[1,]; Pmat2[1,]
+```
+
+Para los datos correspondientes al cajero bancario en la sección [Cajero Bancario](#cajerobancario), estamos interesados en conocer la probabilidad de que después de 50 minutos de funcionamiento el sistema este completamente ocupado (1 usuario atendido y tres en cola), sabiendo que en el instante inicial partimos de $0$ clientes en el sistema. Queremos calcular pues, $p_{04}(4)$. La matriz de tasas viene dada por:
+
+```{r 05-054}
+estados <- c(0, 1, 2, 3, 4)
+nestados <- length(estados)
+
+R <- matrix(nrow = nestados, ncol = nestados, data = 0)
+lambda <- 15/60
+mu <- 1/6 
+
+R[1,2] <- lambda 
+R[2,1] <- mu 
+R[2,3] <- lambda 
+R[3,2] <- mu 
+R[3,4] <- lambda 
+R[4,3] <- mu 
+R[4,5] <- lambda
+R[5,4] <- mu
+```
+
+
+```{r 05-055}
+# Matriz de probabilidades de transición
+Pmat<-matriz.prob.trans(R, 50, 2)
+Pmat
+```
+
+
+```{r 05-056}
+replicas <- 2500
+envs <- mclapply(1:nreplicas, function(i){
+   cola.MM1K(50, 15/60, 1/6, 1, 4)%>%
+    wrap()},mc.set.seed=FALSE)
+  
+# almacenamos el análisis de recursos del sistema
+simresource <- as_tibble(get_mon_resources(envs))
+# Almacenamos el estado final de la cola en el último instante del sistema
+salida <- simresource %>%
+  group_by(replication) %>%
+  summarise(estado = last(system))
+# Estimamos la probabilidad de acabar en cualquiera de los estados
+round(table(salida$estado)/replicas, 3)
+```
+
+
+## Análisis de tiempos de ocupación {#CMTCG}
+
+
+```{r 05-070}
+tiempos.ocupacion<- function(Rmat, Ts, cal)
+{
+  # Algortimo de uniformización para obtener M(T)
+  ################################################
+  
+  # Parámetros de la función
+  # Rmat: matriz de tasas
+  # ts: instante de tiempo
+  # epsilon: error en la aproximación
+  # cal: forms de obtener r con dos valores 1 = máximo, 2 = suma
+  epsilon <- 1e-05
+  # Paso 2. Calculo de r
+  ris <- apply(Rmat, 1, sum)
+  rlimit=ifelse(cal == 1, max(ris),sum(Rmat))
+  # Paso 3. Calculo de hat(P)
+  hatP <- Rmat/rlimit
+  diag(hatP) <- 1 - ris/rlimit
+  # Paso 4. 
+  k <- 0
+  A <- hatP
+  # Paso 5.
+  yek <- exp(-1*rlimit*Ts)
+  ygk <- 1 - yek
+  suma <- ygk
+  # Paso 6.
+  B <- ygk*diag(nrow(Rmat))
+  # Bucle simulación
+  cota <- Ts- epsilon
+  while(suma/rlimit < cota)
+  {
+    k <- k + 1
+    yek <- yek*(rlimit*Ts)/k
+    ygk <- ygk - yek
+    B <- B + ygk*A
+    A <- A%*%hatP
+    suma <- suma + ygk
+  }
+  return(round(B/rlimit, 4))
+}
+```
+
+Retomando el sistema sobre el tiempo de vida de una máquina descrito en \@ref(excmtc005), supongamos que el tiempo esperado hasta que falla una máquina son 10 días, mientras que el tiempo esperado de reparación es de 1 día. Si la máquina funciona el primer día de enero, ¿cuánto tiempo estará en funcionamiento la máquina al finalizar el mes de enero?
+
+```{r 05-071}
+nestados <- 2
+estados=as.character(0:1)
+lambda <- 1
+mu <- 0.1
+R <- matrix(nrow = nestados, ncol = nestados, data = 0,dimnames=list(estados,estados))
+
+R[1,2] <- lambda 
+R[2,1] <- mu 
+
+tiempos.ocupacion(R, 31, 1)
+```
+
+
+```{r 05-073}
+# Réplicas del proceso
+replicas <- 2500
+envs <- mclapply(1:replicas, function(i) {
+    sistema.1m(31, 1, 1/10) %>%
+    wrap()},mc.set.seed=FALSE)
+
+# almacenamos análisis de llegadas del sistema
+simarrivals <- as_tibble(get_mon_arrivals(envs))
+# Almacenamos el estado final de la cola en el último instante del sistema
+simarrivals %>%
+  mutate(tOFF = end_time - start_time) %>%
+  group_by(replication) %>%
+  summarise(totalOFF = sum(tOFF)) %>%
+  ungroup() %>%
+  summarise(mOFF = mean(totalOFF), mON = 31 - mOFF)
+```
+
+
+## Comportamiento límite del proceso {#CMTCH}
+
+```{r 05-080}
+# Obtención de distribuciones límite 
+distr.lim.nm <- function(estados, lambdas, mus)
+{
+  # Parámetros de la función
+  # ========================
+  # estados: número de estados del sistema K
+  # lambdas: vector de tasas de nacimiento lambda0,..., lambda(K-1)
+  # mus: vector de tasas de muerte mu1,...,muK
+  
+  # definimos vector de rho
+  rhos <- rep(1, estados)
+  # calculamos productos acumulados para lambda y mu
+  prl <- cumprod(lambdas)
+  prm <- cumprod(mus)
+  # rellenamos rho con los productos acumulados
+  rhos[2:estados] <- prl/prm
+  # suma de rhos
+  sumarhos <- sum(rhos)
+  # vector de probabilidades
+  ps <- rhos/sumarhos
+  return(ps)
+}
+```
+
+
+Retomamdo el sistema descrito en el ejemplo \@ref(excmtc005), supongamos que el tiempo esperado hasta que falla una máquina son 10 días, mientras que el tiempo esperado de reparación es de 1 día. Si la máquina funciona el primer día de enero ¿cuál es la distribución límite del proceso?
+
+Este sistema es un proceso de nacimiento y muerte donde podemos aplicar la función anterior para obtener la distribución límite con dos estados y tasas $\lambda = 1$, $\mu = 1/10$ (expresadas en días).
+
+
+```{r 05-081}
+lambda=1
+mu=0.1
+estados=2
+probs <- distr.lim.nm(estados,lambda,mu)
+probs
+
+round(365*probs)
+```
+
+### Ecuaciones de balance
+
+```{r 05-086}
+# Función para la resolución numérica de las ecuaciones de balance
+distr.lim.general<-function(Rmat)
+{
+  # Parámetros de la función
+  #=========================
+  # Rmat: matriz de tasas del sistema
+  
+  # número de estados del sistema
+  estados <- nrow(Rmat)
+  # Calculamos r_i y lo colocamos en formato matriz
+  sumarows <- diag(apply(Rmat, 1, sum), estados)
+  # Matriz de coeficientes del sistema de ecuaciones de balance
+  A <- t(R)-sumarows
+  # Completamos la matriz añadiendo la restricción de suma de p`s igual a 1
+  A <- rbind(A, rep(1, estados))
+  # Vector de términos independientes del sistema
+  CS <- c(rep(0, estados), 1)
+  # Resolución del sistema
+  ps <- qr.solve(A, CS)
+  return(ps)
+}
+```
+
+
+Para el sistema de proceso de fabricación se está interesado en conocer cuándo la máquina estará parada a largo plazo. Dado que el espacio de estados es $S = \{1, 2,...,6\}.$ la máquina estará parada cuando nos encontramos en los estados $5 = (4, 0)$ y $6 = (3, 0)$. A partir de la información del sistema podemos obtener la distribución límite del proceso, pero en este caso como no se trata de un proceso de nacimiento y muerte debemos plantear las ecuaciones de balance, a partir de la matriz de tasas, y resolver el sistema numéricamente.
+
+```{r 05-087}
+# Estados del sistema
+nestados <- 6
+# Matriz de tasas
+lambda <- 6
+mu <- 5
+R <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R[1,2] <- lambda 
+R[2,1] <- mu
+R[2,3] <- lambda 
+R[3,2] <- mu
+R[3,4] <- lambda
+R[4,3] <- mu
+R[4,5] <- lambda
+R[5,6] <- mu
+R[6,3] <- mu
+# Resolución  de las ecuaciones de balance
+ps <- distr.lim.general(R)
+ps
+```
+
+
+## Análisis de costes {#CMTCI}
+
+
+Para el sistema de [Mantenimiento de máquinas](#excmtc007), se sabe que el beneficio por cada hora que la máquina está funcionando es de 50 euros, mientras que el coste de que la máquina este apagada es de 15 euros por hora, al que hay que sumar 10 euros por cada hora de reparación. Estamos interesados en conocer el coste-beneficio de un periodo de 24 horas, si sabemos que al inicio del día todas las máquinas están funcionando. 
+
+
+```{r 05-090}
+# Matriz de tasas
+nestados <- 5
+R <- matrix(nrow = nestados, ncol = nestados, data = 0)
+lambda <- 1/2
+mu <- 1/72 
+
+R[1,2] <- 4*lambda 
+R[2,1] <- mu 
+R[2,3] <- 3*lambda 
+R[3,2] <- 2*mu 
+R[3,4] <- 2*lambda 
+R[4,3] <- 3*mu 
+R[4,5] <- lambda
+R[5,4] <- 4*mu
+
+# Matriz de ocupación
+mmat <- tiempos.ocupacion(R, 24, 1)
+# Vector de costes
+costes <- matrix(c(200, 125, 50,-15, -80), ncol = 1)
+# Matriz de beneficios acumulados
+beneficios <- mmat%*%costes
+beneficios
+```
+
+
+
+### Tasas de coste a largo plazo
+
+Consideramos el sistema de la [Central telefónica](#centralTelefonica) en que la capacidad máxima de la centralita es de seis llamadas. Las llamadas llegan según un $PP$ a razón de 4 por minuto, y la duración media de cada llamada es exponencial de media 2 minutos. Consideramos como $X_t$ al número de llamadas que están siendo atendidas en el instante $t$.
+
+1. Queremos saber el beneficio por unidad de tiempo si la facturación por minuto de cada llamada es de 10 céntimos. 
+2. Queremos estimar la pérdida que sufrimos por todas las llamadas que no pueden ser atendidas. 
+
+```{r 05-100}
+# Matriz de tasas
+nestados <- 7
+lambdas <- rep(4, 6) 
+mus <- (1:6)/2
+# Probabilidades del sistema
+probs <- distr.lim.nm(nestados, lambdas, mus)
+
+# vector de beneficios
+beneficio <- 10*(0:6) 
+# beneficio por unidad de tiempo
+sum(beneficio*probs)
+```
+
+
+
+## Tiempos de primer paso {#CMTCJ}
+
+
+
+```{r 05-110}
+# Función para la resolución numérica de los tiempos de primer paso en cmtc
+tiempos.primer.paso<-function(Rmat, A, estados)
+{
+  # Parámetros de la función
+  #=========================
+  # Rmat: matriz de tasas del sistema
+  # A: vector de estados que debemos alcanzar
+  # estados: conjunto de estados total (como carácter)
+  
+  # Estados como texto
+  
+  estados <- as.character(estados)
+  # Tasas r
+  rts <- diag(apply(Rmat, 1, sum), nrow(Rmat))
+  # Seleccionamos el subconjunto de la matriz quitando fila y columna
+  Rmod <- Rmat[-A, -A]
+  rates <- rts[-A, -A]
+  # Número de m´s a estimar
+  lms <- nrow(Rmod)
+  # Matriz de coeficientes del sistema de ecuaciones de balance
+  B <- rates - Rmod
+  # Vector de términos independientes del sistema
+  CS <- rep(1, lms)
+  # Resolución del sistema
+  ps <- as.data.frame(qr.solve(B, CS))
+  rownames(ps) <- paste("estado", estados)[-A]
+  colnames(ps) <-"tiempo"
+  return(ps)
+}
+```
+
+En las condiciones del sistema $M/M/1/K$ del [Cajero Bancario](#cajerobancario) descrito anteriormente, estamos interesados en conocer el tiempo que debe trasncurrir hasta que la cola está vacía si ahora mismo hay un cliente en el sistema y cero en la cola ($X_0 = 0$). Recordemos que el espacio de estados hace referencia al número de clientes en la cola y viene dado por $\{0, 1, 2, 3, 4, 5\}.$
+
+```{r 05-112}
+# Definición matriz de tasas
+nestados <- 6
+R <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R[1,2] <- 10
+R[2,1] <- 15 
+R[2,3] <- 10 
+R[3,2] <- 15 
+R[3,4] <- 10 
+R[4,3] <- 15 
+R[4,5] <- 10
+R[5,4] <- 15
+R[5,6] <- 10
+R[6,5] <- 15
+
+# Tiempos de primer el estado 1 que deseamos alcanzar (corresponde con el primer elemento del espacio de estados)
+tiempos.primer.paso(R, 1, 0:5)
+```
+
+En las condiciones del sistema de [Mantenimiento de aronaves](#mantAeronaves) descrito anteriormente. Supongamos que en un experimento de prueba, el avión despega con cuatro motores que funcionan correctamente y sigue volando hasta que se estrella. Estamos interesados en conocer el tiempo esperado hasta el accidente.
+
+El espacio de estados del sistema es $\{1, 2,...,,9\}$, y sabemos que el avión se estrallará si en algún momento accedemos al subconjunto de estados $\{1, 2, 3, 4, 7\}$. Calculamos los tiempos de primer paso cuando $X_0 = \{5, 6, 8, 9\}$, aunque como el avión está en condiciones óptimas para despegar nos debemos fijar en el valor correspondiente al estado 9. Recordemos que el tiempo medio hasta que falla un motor es de 200 horas, de forma que $\lambda = 1/200 = 0.005$.
+
+
+```{r 05-113}
+# Definición matriz de tasas
+nestados <- 9
+lambda <- 0.005
+R <- matrix(nrow = nestados, ncol = nestados, data = 0)
+R[2,1] <- lambda 
+R[3,2] <- 2*lambda 
+R[4,1] <- lambda 
+R[5,2] <- lambda 
+R[5,4] <- lambda 
+R[6,3] <- lambda 
+R[6,5] <- 2*lambda
+R[7,4] <- 2*lambda
+R[8,5] <- 2*lambda
+R[8,7] <- lambda
+R[9,6] <- 2*lambda
+R[9,8] <- 2*lambda
+
+# Conjunto que debemos alcanzar
+A <- c(1, 2, 3, 4, 7)
+# Tiempos de primer paso 
+tiempos.primer.paso(R, A, 1:9)
+```
+
+
+
+
+

@@ -1,0 +1,487 @@
+---
+title: "Sintaxis Unidad 02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r librerias, echo = FALSE, warning = FALSE, message = FALSE}
+# librerías
+library(tidyverse)
+library(diagram)
+library(simmer)
+library(markovchain)
+library(queueing)
+library(queuecomputer)
+# Librerías de entorno gráfico
+library(sjPlot)
+library(gridExtra)
+library(kableExtra) # y tablas
+```
+
+
+# Ejemplo 2.1
+```{r 03-001,fig.cap="Grafo del proceso."}
+require(markovchain)
+# Definimos estados
+estados <- c("a", "b", "c")
+# Creamos la matriz de transición 
+pmat <- matrix(data = c(0.20, 0.30, 0.50, 0.10, 0.00, 0.90,0.55, 0.00, 0.45), 
+               byrow = TRUE, nrow = 3, 
+               dimnames = list(estados, estados))
+# Creamos la CMTD
+proceso <- new("markovchain", states = estados, 
+               byrow = TRUE, transitionMatrix = pmat)
+# Verificamos los datos introducidos
+proceso
+# y obtenemos el diagrama del proceso
+plot(proceso)
+transitionProbability(object = proceso, t0 = "c", t1 = "a")
+
+# Estado inicial en c
+sini <- c(0, 0, 1)
+# matriz de transición de 3 pasos
+mt3 <- proceso^3
+# Situación del proceso dentro de 3 instantes
+sini*mt3
+# matriz de transición de 10 pasos
+mt10 <- proceso^10
+# Situación del proceso dentro de 10 instantes
+sini*mt10
+### Distribución de probabilidad del proceso dentro de 10 instantes
+# Distribución de  probabilidad inicial
+dini <- c(0.4, 0.2, 0.4)
+# matriz de transición de 10 pasos
+mt10 <- proceso^10
+# distribución de probabilidad en 10 pasos
+dini*mt10
+### Simulación del proceso para n=10 instantes 
+res=vector()
+nsim=100
+n=10
+for(i in 1:nsim){
+  res[i]=rmarkovchain(n, proceso)[n]}
+prop.table(table(res))
+```
+
+# 2.3.2 Fiabilidad de máquinas
+
+```{r}
+# Definimos estados
+estados <- c("0", "1", "2")
+# Matriz de transición 
+pmat <- matrix(data = c(0.0009, 0.0582, 0.9409, 
+                        0.0006, 0.0488, 0.9506, 
+                        0.0004, 0.0392, 0.9604), 
+               byrow = TRUE, nrow = 3, 
+               dimnames = list(estados, estados))
+# CMTD
+fiabilidad <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, 
+                 name = "Fiabilidad")
+# Verificamos los datos introducidos
+fiabilidad
+# Diagrama
+plot(fiabilidad, vertex.color="steelblue", 
+     vertex.label.font = 2, 
+     edge.label.size = 0.1,
+     edge.arrow.size=0.5, 
+     vertex.shape = "rectangle", 
+     vertex.size = 20)
+```
+
+# 2.3.3 Meteorología
+
+```{r}
+# Definimos estados
+estados <- c("Soleado", "Nublado", "LLuvioso")
+# Matriz de transición 
+pmat <- matrix(data = c(0.50, 0.30, 0.20, 
+                        0.50, 0.20, 0.30, 
+                        0.40, 0.50, 0.10), 
+               byrow = TRUE, nrow = 3, 
+               dimnames = list(estados, estados))
+# CMTD
+meteo <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, 
+             name = "Meteorología")
+# Verificamos los datos introducidos
+meteo
+# Diagrama
+plot(meteo, vertex.color="steelblue", 
+     vertex.label.font = 2, 
+     edge.label.size = 0.1,
+     edge.arrow.size=0.5, 
+     vertex.shape = "rectangle", 
+     vertex.size = 60)
+```
+
+# 2.3.4 Problema de inventario
+```{r}
+# Definimos estados
+estados <- c("2 PCs", "3 PCs", "4 PCs", "5 PCs")
+# Matriz de transición 
+pmat <- matrix(data = c(0.0498, 0, 0, 0.9502, 
+                        0.1494, 0.0498, 0, 0.8008,  
+                        0.2240, 0.1494, 0.0498, 0.5768,
+                        0.2240, 0.2240, 0.1494, 0.4026), 
+               byrow = TRUE, nrow = 4, 
+               dimnames = list(estados, estados))
+# CMTD
+inventario <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, 
+                 name = "inventario")
+# Verificamos los datos introducidos
+inventario
+# Diagrama
+plot(inventario, vertex.color="steelblue", 
+     vertex.label.font = 2, 
+     edge.label.size = 0.1,
+     edge.arrow.size=0.5, 
+     vertex.shape = "rectangle", 
+     vertex.size = 40)
+```
+
+# 2.3.5 Planificación de inventario
+```{r}
+# Definimos estados
+estados <- c("1", "2", "3", "4")
+# Matriz de transición 
+pmat <- matrix(data = c(0.9700, 0.0300, 0, 0, 
+                        0.0080, 0.9820, 0.0100, 0,   
+                        0.0200, 0, 0.9750, 0.0050,
+                        0.0100, 0, 0, 0.9900), 
+               byrow = TRUE, nrow = 4, 
+               dimnames = list(estados, estados))
+# CMTD
+planificacion <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, 
+                 name = "planificacion")
+# Verificamos los datos introducidos
+planificacion
+# Diagrama
+plot(planificacion, vertex.color="steelblue", 
+     vertex.label.font = 2, 
+     vertex.label.color = "white",
+     edge.label.size = 0.2,
+     edge.arrow.size=0.5, 
+     vertex.shape = "rectangle",
+     vertex.size = 20)
+```
+
+# 2.3.6 Mercado de valores
+```{r}
+# Definimos estados
+estados <- c("2", "3", "4", "5", "6", "7", "8", "9", "10")
+# Matriz de transición 
+pmat <- matrix(data = c(0.6 , 0.2 , 0.2 , 0 , 0 , 0 , 0 , 0 , 0,
+                        0.4 , 0.2 , 0.2 , 0.2 , 0 , 0 , 0 , 0 , 0,
+                        0.2 , 0.2 , 0.2 , 0.2 , 0.2 , 0 , 0 , 0 , 0,
+                        0 , 0.2 , 0.2 , 0.2 , 0.2 , 0.2 , 0 , 0 , 0,
+                        0 , 0 , 0.2 , 0.2 , 0.2 , 0.2 , 0.2 , 0 , 0,
+                        0 , 0 , 0 , 0.2 , 0.2 , 0.2 , 0.2 , 0.2 , 0,
+                        0 , 0 , 0 , 0 , 0.2 , 0.2 , 0.2 , 0.2 , 0.2,
+                        0 , 0 , 0 , 0 , 0 , 0.2 , 0.2 , 0.2 , 0.4,
+                        0 , 0 , 0 , 0 , 0 , 0 , 0.2 , 0.2 , 0.6), 
+               byrow = TRUE, nrow = 9, 
+               dimnames = list(estados, estados))
+# CMTD
+mercado.valores <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, 
+                 name = "Mercado de valores")
+# Verificamos los datos introducidos
+mercado.valores
+# Diagrama
+plot(mercado.valores, vertex.color="steelblue", 
+     vertex.label.font = 2, 
+     vertex.label.color = "white",
+     edge.label.size = 0.2,
+     edge.arrow.size=0.5, 
+     vertex.shape = "rectangle",
+     vertex.size = 20)
+```
+
+# Inventario con desabastecimiento
+```{r}
+# Definimos estados
+estados <- c("-1", "0", "1", "2")
+# Matriz de transición 
+pmat <- matrix(data = c(0 , 0.1 , 0.4 , 0.5,
+                        0 , 0.1 , 0.4 , 0.5,
+                        0.1 , 0.4 , 0.5 , 0,
+                        0 , 0.1 , 0.4 , 0.5), 
+               byrow = TRUE, nrow = 4, 
+               dimnames = list(estados, estados))
+# CMTD
+inventario2 <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, 
+                 name = "Inventario 2")
+# Verificamos los datos introducidos
+inventario2
+# Diagrama
+plot(inventario2, vertex.color="steelblue", 
+     vertex.label.font = 2, 
+     vertex.label.color = "white",
+     edge.label.size = 0.2,
+     edge.arrow.size=0.5, 
+     vertex.shape = "rectangle",
+     vertex.size = 20)
+```
+
+# 2.4.1 Comunicación entre estados 
+```{r}
+# Caracterización
+summary(proceso)
+```
+
+## Ejemplo 2.3
+```{r}
+# Inicialización
+set.seed(12)
+tiempo <- 21 # valor inicial y 20 transiciones
+invent <- c()  # vector con los valores de inventario
+demanda <- c() # vector con los valores de demanda
+A <- 0
+B <- 2
+##### Configuración metodo transformada inversa ######
+# datos uniformes
+unif <- runif(tiempo-1)
+# Valores posibles para la demanda
+valores <- c(0, 1, 2)
+# Probabilidades para la demanda
+prob <- c(0.5, 0.4, 0.1)
+probacum <- cumsum(prob)  # probabilidades acumuladas
+# valor inicial del proceso
+invent[1] <- 2
+demanda[1] <- 0
+i<-2
+while (i <= tiempo)
+{
+  # simulamos demanda
+  demanda[i] <- valores[min(which(unif[i-1] <= probacum))] 
+  # Actualizamos inventario
+  ifelse(invent[i-1] <= A, 
+         invent[i] <- B - demanda[i], 
+         invent[i] <- invent[i-1]-demanda[i])
+  # iteración siguiente
+  i<-i+1
+}
+# Devolvemos la secuencia de estados 
+inventario2.sim=data.frame(invent,demanda)
+head(inventario2.sim)
+# proporción de semanas que hay que reabastecerse
+sum(inventario2.sim$invent <= A)
+# proporción de semanas con demanda no satisfecha
+mean(inventario2.sim$invent <inventario2.sim$demanda)
+```
+
+# Tiempos de ocupación
+## Ejemplo 2.4
+```{r}
+## Simulación de los tiempos de ocupación (número de visitas a un estado)
+# Número de estados del proceso
+nestat <- dim(proceso)
+# Estados
+nombres<- names(proceso)
+# Generamos la matriz de ocupaciones
+mocupa <- matrix(rep(0,nestat*nestat),
+                 nrow = nestat, dimnames = list(nombres, nombres))
+# Bucle de cálculo de los tiempos de ocupación
+P=proceso[1:nestat,1:nestat] # matriz de transición
+for (i in 0:10)
+{
+   mocupa <- mocupa + P^i
+}
+mocupa
+```
+
+```{r}
+mocupa.proceso <- function(sistema, n)
+{
+  # Número de estados del proceso
+  nestat <- dim(sistema)
+  # Estados
+  nombres<- names(sistema)
+  # Generamos la matriz de ocupaciones
+  mocupa <- matrix(rep(0, nestat*nestat),
+                 nrow = nestat, dimnames = list(nombres, nombres))
+  # Bucle de calculo de los tiempos de ocupación
+  P=sistema[1:nestat,1:nestat]
+  for (i in 0:n)
+   mocupa <- mocupa + P^i
+  
+  return(mocupa)
+}
+```
+
+# Análisis de costes
+## Ejemplo 2.5
+```{r}
+c=matrix(c(337.75,431.95,470.15,466.23), ncol=1)
+M10=mocupa.proceso(inventario,10)
+g=M10 %*% c
+g
+
+c.sim <- function(estado, nsim)
+{
+  # estado: estado inicial del sistema
+  # nsim: nº simulaciones para la aproximación
+  
+  # Fijamos semilla
+  set.seed(12)
+  # Simulamos valores del mínimo entre i y D_n
+  datos <- data.frame(rsim = rpois(nsim, 3), rdos <- rep(estado, nsim))
+  minimo <-apply(datos, 1 ,min) # Mínimo por filas
+  # Valor esperado min(i,D_n)
+  esperanza <- mean(minimo)
+  # coste
+  coste <- round(-50*estado+250*esperanza, 2)
+  return(coste)
+}
+
+nsim <- 1000000
+c.s=matrix(c(c.sim(2, nsim),c.sim(3, nsim),
+      c.sim(4, nsim),c.sim(5, nsim)),ncol=1)
+c.s
+
+# matriz M
+Mmat <- mocupa.proceso(inventario, 10)
+# vector g
+beneficio <- Mmat%*%c.s
+beneficio
+```
+
+# Tiempos de primer paso
+```{r}
+tiempo.pp <- function(proceso, estado)
+{
+  # estados del proceso
+  estados <- states(proceso)
+  numestados <- length(estados)
+  # posición de los estados deseados
+  lestat <- length(estado)
+  pos <- which(estados %in% estado)
+  # matriz P_N
+  P_N <- proceso[-pos,-pos]
+  # vector de unos
+  vector.1 <- matrix(rep(1, numestados-lestat), ncol=1)
+  # sistema de ecuaciones
+  sistema <- diag(numestados-lestat) - P_N
+  # solución del sistema
+  solucion <- solve(sistema, vector.1)
+  return(solucion)
+}
+```
+
+## Ejemplo 2.6
+```{r}
+# Tiempo de primer paso partiendo del estado "b"
+# libreria
+meanFirstPassageTime(proceso, "b")
+# definida por nosotros
+tiempo.pp(proceso, "b")
+
+meanFirstPassageTime(proceso)
+
+# Tiempo esperado e primer paso de "b" a "A"
+tiempo.pp(proceso,c("a","c"))
+
+# Probabilidad de primer paso de "b" a "A"
+firstPassageMultiple(proceso, "b", c("a","c"), 10)
+
+# Tiempo de recurrencia
+meanRecurrenceTime(proceso)
+
+# Probabilidad de recurrencia en 10 pasos
+firstPassageMultiple(proceso, "b", "b", 10)
+```
+
+## Ejemplo 2.7
+```{r}
+# Tiempo de primer paso para acabar en el estado "0"
+tiempo.pp(fiabilidad, "0")
+```
+
+## Ejemplo 2.8
+```{r}
+# Definimos estados
+estados <- c("0", "1", "2", "3", "4")
+# Matriz de transición 
+pmat <- matrix(data = c(1, 0, 0, 0, 0,  
+                        0.02, 0.95, 0.03, 0, 0, 
+                        0.008, 0, 0.982, 0.01, 0,   
+                        0.02, 0, 0, 0.975, 0.005,
+                        0.01, 0, 0, 0, 0.99), 
+               byrow = TRUE, nrow = 5, 
+               dimnames = list(estados, estados))
+# CMTD
+planificacion2 <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, name = "planificacion")
+# Verificamos los datos introducidos
+planificacion2
+
+# y describimos el sistema
+summary(planificacion2)
+
+# Tiempo esperado para llegar a estado 0
+tiempo.pp(planificacion2, "0")
+```
+
+# Comportamiento a largo plazo
+```{r}
+# Distribución estacionaria
+steadyStates(proceso)
+```
+
+## Ejemplos 2.10
+```{r}
+# Estructura del proceso
+# Definimos estados
+estados <- as.character(0:7)
+# Matriz de transición 
+pmat <- matrix(data = c(0.3679, 0.3679, 0.1839, 0.0613, 0.0153, 
+                        0.0031, 0.0005, 0.0001,
+0.3679, 0.3679, 0.1839, 0.0613, 0.0153, 0.0031, 0.0005, 0.0001,
+0.0, 0.3679, 0.3679, 0.1839, 0.0613, 0.0153, 0.0031, 0.0006,
+0.0, 0.0, 0.3679, 0.3679, 0.1839, 0.0613, 0.0153, 0.0037,
+0.0, 0.0, 0.0, 0.3679, 0.3679, 0.1839, 0.0613, 0.0190,
+0.0, 0.0, 0.0, 0.0, 0.3679, 0.3679, 0.1839, 0.0803,
+0.0, 0.0, 0.0, 0.0, 0.0, 0.3679, 0.3679, 0.2642,
+0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3679, 0.6321), 
+               byrow = TRUE, nrow = 8, 
+               dimnames = list(estados, estados))
+# CMTD
+teleco <- new("markovchain", states = estados, 
+                 byrow = TRUE, transitionMatrix = pmat, 
+              name = "Telecomunicaciones")
+# Revisamos si la CMTD es irreducible
+summary(teleco)
+
+# Periodo del sistema
+period(teleco)
+
+# Distribución estacionaria
+steadyStates(teleco)
+
+estados <- 0:7
+distribucion <- steadyStates(teleco)
+# Valor esperado
+sum(estados*distribucion)
+```
+
+## Ejemplo 2.11
+```{r}
+# ¿el proceso es irreducible?
+summary(planificacion)
+
+# Vector de costes
+costes <- c(400, 600, 800, 1000)
+# distribución estado estacionario
+distribucion <- steadyStates(planificacion)
+# gastos esperados por semana
+cat("\n Gastos semanales:",sum(distribucion*costes))
+
+
+```{r}

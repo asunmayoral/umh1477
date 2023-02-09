@@ -1,0 +1,804 @@
+---
+title: "Unidad07_sintaxis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Simulación DES con simmer {#simmerunidad}
+
+
+```{r}
+library(simmer)
+library(simmer.bricks)
+library(simmer.plot)
+library(parallel)
+library(dplyr)
+library(tidyverse)
+```
+
+## Conceptos clave
+
+
+
+## Entornos y trayectorias
+
+Veamos un ejemplo de un modelo de simulación sencillo en el que llegan clientes a una tienda cada minuto (durante 3 minutos), miran los productos durante 5 minutos y se van.
+
+```{r}
+env=simmer()
+# Se define la trayectoria "tienda" con la actividad que realizan los clientes
+tienda=trajectory() %>%
+  # Lanza un mensaje de aviso de llegada
+  log_("Llega a la tienda") %>%
+  # mira productos 5min
+  timeout(5) %>% 
+  # Lanza un mensaje de aviso de llegada
+  log_("Sale de la tienda")
+# se lanza el entorno de simulación incluyendo el generador de llegadas 
+# (clientes), que aparecen en tres instantes de tiempo,
+# y que son dirigidos a la trayectoria "tienda"
+env %>%
+  add_generator("cliente", tienda,at(1,2,3)) %>%
+  # se muestran los resultados en pantalla
+  print() %>%
+  # se lanza el sistema
+  run()
+```
+
+
+Adaptemos el ejemplo anterior a tiempos aleatorios uniformes entre llegadas y tiempos de permanencia aleatorios normales.
+
+```{r}
+env=simmer()
+tienda=trajectory() %>%
+  log_("Llega a la tienda") %>%
+  # Cada cliente permanece en la tienda mirando productos aprox. 5min
+  timeout(function() rnorm(1,5,1)) %>% 
+  log_("Sale de la tienda")
+
+env %>%
+  # el tiempo entre llegadas de los clientes es aleatorio entre 0 y 2 min.
+  add_generator("cliente", tienda,function() runif(1,0,2)) %>% 
+  print() %>%
+  # simulamos hasta el instante 10
+  run(10) 
+```
+
+
+## Monitoreo
+
+
+```{r}
+trayectoria=trajectory() %>%
+   timeout(3)
+
+simmer() %>%
+  add_generator("llegada",trayectoria,at(0,1,2)) %>%
+  run() 
+```
+
+
+```{r}
+simmer() %>%
+  add_generator("llegada",trayectoria,at(0,1,2)) %>%
+  print() %>%
+  run() 
+```
+
+
+```{r}
+simmer() %>%
+  add_generator("llegada",trayectoria,at(0,1,2)) %>%
+  run() %>%
+  invisible
+```
+
+
+```{r}
+env=simmer()
+trayectoria=trajectory() %>%
+  log_("Llegada contabilizada.") %>%
+  timeout(3)
+
+env %>%
+  add_generator("llegada",trayectoria,function() rexp(1,1/2)) %>%
+  run(5) %>%
+  invisible
+```
+
+
+```{r}
+# próximos 3 eventos
+env %>%
+    peek(3)
+```
+
+
+```{r}
+env %>%
+  stepn() %>%
+  print()
+```
+
+
+Ejemplifiquemos su funcionamiento sobre el sistema sencillo de la tienda que ya vimos anteriormente, con tiempos para mirar al llegar a la tienda, seguidos de atención por dependientes.
+
+```{r}
+env=simmer()
+tienda=trajectory() %>%
+  log_(function()  "Llega a la tienda") %>%
+  timeout(function() rnorm(1,5,1)) %>% # mira productos aprox. 5min
+  seize("dependiente",1) %>%
+  log_("Es atendido") %>%
+  timeout(function() rnorm(1,10,1)) %>%
+  release("dependiente",1)%>%
+  log_(function() "Sale de la tienda")
+
+env %>%
+  add_generator("cliente", tienda,function() runif(1,0,5)) %>% # tiempo entre llegadas 
+  add_resource("dependiente",2) %>% # hay dos dependientes
+  print() %>%
+  run(20) # simulamos hasta ese instante
+
+llegadas=get_mon_arrivals(env) 
+llegadas
+atributos=get_mon_attributes(env)
+atributos
+recursos=get_mon_resources(env)
+recursos
+```
+
+
+```{r}
+mon <- monitor_csv(path=tempdir()) # tempdir() lo podemos sustituir por nuestro directorio de trabajo
+mon   # nos muestra la ubicación y nombre de los ficheros
+env_mon=simmer(mon=mon)
+tienda=trajectory() %>%
+  log_(function()  "Llega a la tienda") %>%
+  timeout(function() rnorm(1,5,1)) %>% # mira productos aprox. 5min
+  seize("dependiente",1) %>%
+  log_("Es atendido") %>%
+  timeout(function() rnorm(1,10,1)) %>%
+  release("dependiente",1)%>%
+  log_(function() "Sale de la tienda")
+
+env_mon %>%
+  add_generator("cliente", tienda,function() runif(1,0,5)) %>% # tiempo entre llegadas 
+  add_resource("dependiente",2) %>% # hay dos dependientes
+  print() %>%
+  run(20) # simulamos hasta ese instante
+```
+
+
+```{r}
+llegadas=read.csv(mon$handlers$arrivals)
+llegadas
+# que contiene la misma información (salvo "replication") que
+get_mon_arrivals(env_mon)
+```
+
+
+```{r}
+arrivals=get_mon_arrivals(env)
+plot(arrivals, metric="waiting_time")
+plot(arrivals, metric="activity_time")
+plot(arrivals, metric="flow_time")
+```
+
+
+```{r eval=FALSE, include=FALSE}
+resources=get_mon_resources(env)
+plot(resources, metric="usage", "dependiente", items = c("server","queue"))
+plot(resources, metric="usage", "dependiente", items = "server", steps = TRUE)
+plot(resources, metric="utilization", "dependiente")
+```
+
+
+```{r}
+arrivals=get_mon_arrivals(env)
+ggplot(arrivals,aes(x=activity_time))+
+  geom_histogram(fill="Skyblue",color="blue")
+```
+
+## Fuentes de llegadas
+
+
+Ejemplifiquemos las posibilidades de generación de tiempos de llegadas con el ejemplo anterior que ya realizamos, en el que al entrar cada cliente, pasa 5 minutos en el sistema y luego se marcha.
+
+```{r}
+env=simmer()
+# defino la función de los tiempos entre llegadas, U(0,2)
+distr <- function() runif(1, 0, 2)
+
+# definimos laa acciones que hace el cliente en la tienda
+tienda <- trajectory() %>%
+  timeout(5)
+
+env %>%
+  # los tiempos entre llegadas se simulan de "distr"
+  add_generator("llegada_random", tienda, distr) %>%
+  # las llegadas ocurren en los instantes 0, 1, 10, 30, 40 y 43
+  add_generator("llegada_at", tienda, at(0,1,10,30,40,43)) %>%
+  # los tiempos entre llegadas se simulan de "distr", empezando en el instante 1
+  add_generator("llegada_from", tienda, from(1, distr)) %>%
+  # los tiempos entre llegadas se simulan de "distr", acabando en el instante 5
+  add_generator("llegada_to", tienda, to(5, distr)) %>%
+  # los tiempos entre llegadas se simulan de "distr", empezando en 1 y acabando en 5
+  add_generator("llegada_from_to", tienda, from_to(1, 5, distr, every=4)) %>%
+  run(15) %>% 
+  # monitorizamos todas las llegadas
+  get_mon_arrivals()
+```
+
+También podemos desencadenar llegadas a demanda desde otra trayectoria.
+Sería el ejemplo de un operador, que en el momento en que ficha digitalmente como trabajador de la empresa, se incorpora a trabajar durante una jornada parcial de 3 horas:
+
+```{r}
+# jornada de trabajo
+t0 <- trajectory() %>%
+  timeout(3)
+# activa "Trabajar": la jornada de trabajo
+t1 <- trajectory() %>%
+  activate("Trabajar")
+
+simmer() %>%
+  # simula llegadas al trabajo cuando "Trabajar" esté activado
+  add_generator("Trabajar", t0, when_activated()) %>%
+  # simula una llegada a fichar
+  add_generator("Fichado digital", t1, at(8)) %>%
+  run() %>%
+  get_mon_arrivals()
+```
+
+
+## Recursos
+
+Transformemos el ejemplo anterior en clientes que llegan aleatoriamente a una tienda.
+Ahora al llegar, cada cliente mira productos alrededor de 5 minutos, luego busca a un dependiente para ser atendido o espera hasta que uno esté desocupado, este lo atiende por aproximadamente 10 minutos y luego se va.
+Supongamos que hay 2 dependientes en la tienda.
+
+```{r}
+set.seed(999)
+env=simmer()
+
+# Actividades que se desarrollan en la tienda
+tienda=trajectory() %>%
+  log_(function()  "Llega a la tienda") %>%
+  # mira productos aprox. 5min
+  timeout(function() rnorm(1,5,1)) %>% 
+  # es asignado a un dependiente 
+  log_(function() "Busca un dependiente") %>%
+  seize("dependiente",1) %>%
+  # que lo antiende aprox. 10min.
+  log_("Es atendido") %>%
+  timeout(function() rnorm(1,10,1)) %>%
+  # desocupa al dependiente
+  release("dependiente",1)%>%
+  # sale de la tienda
+  log_(function() "Sale de la tienda")
+
+env %>%
+  # simulación (uniforme(0,5) del tiempo entre llegadas de clientes
+  add_generator("cliente", tienda,function() runif(1,0,5)) %>% 
+  # dimensionamiento de recursos: dos dependientes
+  add_resource("dependiente",2) %>%  
+  print() %>%
+  run(20) %>% # simulamos hasta ese instante
+  # monitorizamos los recursos (dependientes)
+  get_mon_resources()
+```
+
+
+## Atributos
+
+Por ejemplo, el siguiente modelo define la llegada de un sujeto al que se le da el atributo 'peso=60', lo divulga, y tras comer sube un kilo y vuelve a comunicarlo.
+
+```{r}
+env=simmer()
+traj=trajectory() %>%
+  # asignamos el atributo numérico a peso
+  set_attribute("peso",60) %>%
+  log_(function() paste("Hoy peso",get_attribute(env,"peso"), "kg. Me voy a comer.")) %>%
+  # a continuación lo modificamos sumándole 1
+  set_attribute("peso",1,mod="+") %>%
+  # y por último lo visualizamos
+  log_(function() paste("Mi peso ahora es",get_attribute(env,"peso")))
+
+env %>%
+  add_generator("peso",traj,at(1),mon=2) %>%
+  run() %>%
+  get_mon_attributes()
+```
+
+
+Simulemos un proceso en el que llegan pacientes al triaje de un servicio de urgencias de un hospital en diferentes instantes de tiempo, que resultan ser graves o no con cierta probabilidad. Cuando llega un paciente grave (prioridad=1), es derivado inmediatamente a un médico y accede al servicio de atención tan pronto acabe la atención al paciente que está atendiendo en ese momento. Tras atenderlo, el médico vuelve a atender al resto de pacientes por orden de prioridad.
+
+Especificamos en este caso, para cada llegada, una simulación $Ber(p)$ que establece si el paciente está grave (valor 1). La preferencia del recurso se fija también a 1, para garantizar que dará preferencia a todas las llegadas con prioridad mayor o igual a 1. No se da valor a `restart`, asumiendo que por defecto continuará con los pacientes en el orden de llegada-prioridad.
+
+```{r}
+set.seed(1)
+env=simmer()
+
+triaje = trajectory() %>%
+  set_prioritization(function() c(rbinom(1,1,0.4),1,NA)) %>%
+  # guardamos como atributo la prioridad asignada
+  set_attribute("Prioridad",function() get_prioritization(env)[1]) %>% 
+  # se redirige al médico
+  seize("medico",1) %>%
+  # que tarda cierto tiempo en atenderlo
+  timeout(function() rexp(1,0.2)) %>%
+  release("medico",1)
+  
+
+env %>% 
+  add_generator("paciente",triaje,at(0:4),mon=2) %>%
+  add_resource("medico",1) %>%
+  run() 
+
+#visualizamos el output
+merge(get_mon_arrivals(env),get_mon_attributes(env))
+```
+
+## Interacción con recursos
+
+Para ejemplificar su uso consideramos un ambulatorio médico al que llegan pacientes.
+Si al llegar el paciente, el doctor está disponible, es atendido por este durante 5 minutos.
+Si no está disponible, es rechazado y derivado a consulta de enfermería, donde es atendido siempre 8 minutos, al haber 10 enfermeras disponibles.
+En ambos casos el paciente se va del ambulatorio al terminar la consulta a la que haya entrado.
+
+```{r}
+env=simmer()
+
+traj=trajectory() %>%
+  log_(function() paste("Llega el ",get_name(env))) %>%
+  seize(
+    "doctor",1,continue=c(TRUE,FALSE),
+    post.seize=trajectory("Paciente aceptado") %>% 
+      log_("Pasa a consulta con el doctor"), 
+    reject=trajectory("Paciente rechazado") %>% 
+      log_("El doctor está ocupado y es derivado a enfermería") %>% 
+      seize("nurse",1) %>%
+      log_("Pasa a consulta con la enfermera") %>%
+      timeout(8) %>%
+      release("nurse",1) %>%
+      log_(function() paste("El",get_name(env), "sale de enfermería"))) %>%
+  timeout(5) %>% 
+  release("doctor",1) %>% 
+  log_("El doctor ya está libre")
+
+env %>%
+   add_resource("doctor",capacity=1,queue_size=0) %>% 
+   add_resource("nurse",capacity=10,queue_size=0) %>%
+   add_generator("paciente",traj,at(0,1,5,8)) %>%
+   run()
+```
+
+
+
+Pongamos como ejemplo una consulta médica con 3 doctores, que atienden a los pacientes de un modo ordenado secuencial conforme llegan a la consulta.
+
+```{r}
+traj <- trajectory() %>%
+  simmer::select(paste0("doctor", 1:3), "round-robin") %>%
+  seize_selected(1) %>%
+  timeout(5) %>%
+  release_selected(1)
+
+simmer() %>%
+  add_resource("doctor1") %>%
+  add_resource("doctor2") %>%
+  add_resource("doctor3") %>%
+  add_generator("patient", traj, at(0, 1, 2)) %>%
+  run() %>%
+  get_mon_resources()
+```
+
+## Interacción con fuentes
+
+En el ejemplo a continuación, una llegada, al acceder a la trayectoria, desactiva la fuente que genera llegadas cada segundo, deja transcurrir 1 segundo y después vuelve a activarla.
+
+```{r}
+traj=trajectory() %>%
+  deactivate("dummy") %>% 
+  timeout(1) %>% 
+  activate("dummy") 
+
+simmer() %>%
+  add_generator("dummy",traj,function() 1) %>% 
+  run(10) %>% 
+  get_mon_arrivals()
+```
+
+En este otro ejemplo se define un simulador que genera llamadas cada 2 segundos y las redirige a la trayectoria 'traj2.' Una vez allí, la fuente de llamadas se modifica para que a partir de que la primera llamada finalice (estando 2 segundos en 'traj2'), se generen llamadas cada segundo y se redirijan estas a la trayectoria 'traj1'.
+
+```{r}
+traj1 <- trajectory() %>%
+  timeout(1)
+
+traj2 <- trajectory() %>%
+  set_source("llamada", function() 1) %>%
+  set_trajectory("llamada", traj1) %>%
+  timeout(2)
+
+simmer() %>%
+  add_generator("llamada", traj2, function() 2) %>%
+  run(6) %>%
+  get_mon_arrivals()
+```
+
+## Ramificación
+
+En el ejemplo a continuación simulamos un juego en el que el jugador lanza una moneda.
+Si llega durante la primera hora (*now(env)=1*), gana un caramelo y se va, y si no, pierde dos caramelos que ha de regalar a María y a José.
+
+```{r}
+env=simmer()
+
+traj=trajectory() %>%
+  branch(
+    option=function() now(env), continue=c(FALSE,TRUE), #si 1 la 1ª trayectoria y se va; si 2 la 2ª trayectoria y sigue
+      trajectory() %>% log_(function() paste(get_name(env),"Ha llegado el instante",now(env),", gana un caramelo y se va.")), 
+      trajectory() %>% log_(function() paste(get_name(env),"Ha llegado el instante",now(env),"y regala dos caramelos"))) %>% 
+  clone(n=2, 
+    trajectory() %>% log_("uno a María"), 
+    trajectory() %>% log_("otro a José")) %>%  
+  synchronize() 
+  
+env %>%
+  add_generator("Jugador",traj,at(1,2)) %>%
+  run() %>%
+  invisible
+```
+
+## Bucles
+
+En el siguiente ejemplo, un jugador accede a un reto de resistencia en el que ha de levantar pesas y mantenerlas.
+Por cada 5 minutos que aguante, recibirá una recompensa de 25€.
+El jugador es capaz de aguantar 30 minutos, pero la máxima recompensa a recibir es de 100€, por lo que se detendrá cuando consiga a esa cantidad.
+
+```{r}
+env <- simmer()
+
+traj <- trajectory() %>%
+  set_attribute("var", 0) %>%
+  log_(function()
+    paste("Tiempo de resistencia:",now(env),". Ganancia=", get_attribute(env, "var"))) %>%
+  set_attribute("var", 25, mod="+") %>%
+  timeout(5)%>%
+  rollback(3, check=function() get_attribute(env, "var") <= 100) 
+
+env %>%
+  add_generator("dummy", traj, at(0)) %>%
+  run() %>% invisible
+```
+
+## Ejecución en lotes
+
+Un ejemplo de sistema en el que puede tener sentido la ejecución por lotes es la visita guiada a un museo, en la que son precisos 5 visitantes para asignar un guía e iniciar la visita.
+Si en 10 minutos no se han conseguido los visitantes, se iniciará la visita igualmente con los visitantes disponibles.
+La visita dura 5 minutos y, puesto que hay un único guía, será preciso esperar a su finalización para empezar la siguiente.
+Los tiempos entre llegadas provienen de una distribución exponencial de media 5.
+
+```{r}
+set.seed(1234)
+env=simmer()
+
+visita=trajectory() %>%
+  batch(n=5,timeout=10,name="visitaguiada",permanent=FALSE) %>%
+  seize("guia",1) %>%
+  log_("Comienza la visita con el guía") %>%
+  timeout(5) %>%
+  release("guia",1) %>%
+  log_("Visita terminada") 
+  
+
+env %>%
+  add_resource("guia",1) %>%
+  add_generator("visitante", visita,function() rnorm(1,5,0.5)) %>%
+  print() %>%
+  run(until=50) 
+
+get_mon_arrivals(env)
+
+```
+
+## Programación asíncrona
+
+
+En el ejemplo a continuación, una inteligencia artificial reclama una clave de acceso al usuario para desbloquear un recurso digital y permitirle el acceso.
+El usuario proporciona la clave de acceso al cabo de 5 segundos.
+La IA recibe la clave y desbloquea el recurso.
+
+```{r}
+ia.acceso=trajectory() %>%
+  log_("Solicito clave de acceso") %>%
+  trap("clave") %>%
+  wait() %>%  
+  log_("Clave recibida y acceso permitido")
+
+usuario=trajectory() %>%
+  log_("Clave enviada") %>%
+  send("clave") 
+  
+simmer() %>%
+  add_generator("ia.acceso",ia.acceso,at(0)) %>%
+  add_generator("usuario",usuario,at(5)) %>%
+  run() %>%
+  invisible
+```
+
+## Renuncias
+
+En el ejemplo siguiente los clientes llegan a un banco con un solo empleado, del que se
+
+```{r}
+banco=trajectory() %>%
+  log_("He llegado al banco") %>%
+  # se marcha si no es atendido en 5 minutos
+  renege_in(
+    5,
+    out=trajectory() %>%
+      log_("He colmado mi paciencia. Me voy...")) %>%
+  seize("empleado",1) %>%
+  # me quedo si soy atendido en 5 minutos
+  renege_abort() %>%
+  log_("Me están atendiendo") %>%
+  timeout(10) %>%
+  release("empleado",1) %>%
+  log_("He terminado")
+
+simmer() %>%
+  add_resource("empleado",1) %>%
+  add_generator("cliente",banco,at(0,1)) %>%
+  run() %>%
+  invisible
+```
+
+## Ejemplos
+
+### Proceso industrial
+
+Utilizamos la ilustración de un proceso industrial de Pidd (1988), Section 5.3.1, base de la introducción del artículo de Ucar et al (2019), en el que describe de modo completo la simulación del proceso con `simmer`, y que traducimos y comentamos a continuación.
+
+Consideramos un negocio de trabajos de ingeniería, en la que hay varias máquinas idénticas.
+Cada máquina es capaz de procesar cualquier trabajo que llegue.
+Hay un suministro de trabajos sin perspectivas de escasez.
+Los trabajos se asignan a la primera máquina disponible.
+El tiempo en completar un trabajo es variable, pero depende de la máquina que se utilice.
+Las máquinas están a cargo de los operarios, que las revisa y realizan una serie de tareas sobre ellas.
+
+El proceso está pues constituido por dos tipos de recursos:
+
+-   máquinas, a las que llegan trabajos (jobs)
+-   operarios, a los que llegan tareas (tasks)
+
+Respecto a cómo ocupan su tiempo de operatividad, distinguimos entre **estados** y **actividades**.
+Estas últimas se refieren a tareas que conllevan cierto tiempo para ser completadas.
+En la Figura
+
+Las actividades que realizan los operarios son:
+
+-   RESET: resetear/reinicializar la máquina, si no muestra desgaste que afecte a su funcionalidad
+-   RETOOL: reparar la máguina si aprecia algún desgaste que afecta al funcionamiento. Después de una reparación (RETOOL) y antes de reiniciar el trabajo, toda máquina ha de ser reinicializada (RESET).
+-   AWAY: salir un rato para atender sus necesidades personales.
+
+La actividad que llevan a cabo las máquinas es la propia realización del trabajo (RUNNING).
+
+Se pueden identificar dos clases de procesos o fuentes de llegadas, que generan:
+
+-   los *trabajos de tienda* (shop jobs), que usan las máquinas y las desgastan,
+-   las *tareas personales* que realizan los operarios que se ausentan (AWAY).
+
+La forma de simular este sistema con `simmer` consiste en considerar las máquinas y operarios como recursos y describir como trayectorias los ciclos de los trabajos de tienda y de las tareas personales.
+
+En primer lugar inicializamos un nuevo entorno de simulación y definimos el tiempo de compleción de las diferentes actividades, que vamos a definir según distribuciones exponenciales.
+Asímismo, se definen los tiempos entre llegadas para los trabajos y las tareas, con NEW_JOB y NEW_TASK respectivamente.
+Consideraremos también una probabilidad 0.2 para que una máquina haya de ser reparada después de hacer un trabajo (CHECK_WORN).
+
+```{r}
+# inicializamos una semilla para reproducir siempre las mismas simulaciones
+set.seed(1234)
+# e inicializamos el entorno de simulación
+env=simmer("JobShop")
+
+# Definimos cómo se simularán los tiempos de las actividades
+RUNNING=function() rexp(1,1)
+RETOOL= function() rexp(1,2)
+RESET= function() rexp(1,3)
+AWAY= function() rexp(1,1)
+# chequeo de desgaste y necesidad de reparación
+CHECK_WORN=function() runif(1)<0.2 # da FALSE/TRUE
+# y las llegadas de trabajos y tareas personales
+NEW_JOB=function() rexp(1,5)
+NEW_TASK=function() rexp(1,1)
+```
+
+
+```{r}
+job=trajectory() %>%
+  seize("máquina") %>%
+  timeout(RUNNING) %>%
+  branch(
+    CHECK_WORN, continue=TRUE, 
+      trajectory() %>%
+        seize("operario") %>%
+        timeout(RETOOL) %>%
+        release("operario")
+  ) %>%
+  seize("operario") %>%
+  timeout(RESET) %>%
+  release("operario") %>%
+  release("máquina")
+
+task=trajectory() %>%
+  seize("operario") %>%
+  timeout(AWAY) %>%
+  release("operario")
+```
+
+Una vez que han sido definidas las trayectorias de los procesos, de las máquinas y de los operarios, dimensionamos el sistema con 10 máquinas idénticas y 5 operarios, y creamos también un generador de trabajos (jobs) y otro de tareas personales (tasks).
+Dejamos correr el sistema durante 1000 unidades de tiempo.
+
+```{r}
+env %>%
+  add_resource("máquina",10) %>%
+  add_resource("operario",5) %>%
+  add_generator("job",job,NEW_JOB)%>%
+  add_generator("task",task,NEW_TASK) %>%
+  run(until=1000) %>%
+  invisible
+```
+
+
+```{r}
+aggregate(cbind(server,queue)~resource, get_mon_resources(env),mean)
+```
+
+### Sistemas de colas
+
+Veamos cómo implementar con `simmer` una cola M/M/1 según el ejemplo mostrado en [FishyOperations, 2016](https://www.r-bloggers.com/2016/04/simulating-queueing-systems-with-simmer/).
+Las viñetas de simmer incluyen más ejemplos de sistemas M/M/c/k ([Ucar, 2020a](https://r-simmer.org/articles/simmer-06-queueing.html)), redes de colas y modelos de Markov de tiempo continuo CTMC ([Ucar, 2020b](https://r-simmer.org/articles/simmer-07-ctmc.html)).
+
+En la notación de Kendall (Kendall, 1953), un sistema M/M/1 tiene una distribución de llegadas exponencial con media $\lambda$, (**M**/M/1), un único servidor (M/M/**1**), y un tiempo de servicio exponencial de media $\mu$, (M/**M**/1).
+Por ejemplo, la gente llega a un cajero automático aproximadamente cada $\lambda$ minutos, espera su turno en la calle y saca dinero durante aproximadamente $\mu$ minutos.
+Se definen entonces los parámetros básicos del sistema cuando $\rho<1$ (para que no se sature el sistema):
+
+-   utilización del servidor, $\rho=\lambda/\mu$
+-   promedio de clientes en el sistema (cola y cajero), $N=\rho/(1-\rho)$
+-   tiempo medio en el sistema (ley de Little), $T=N/\lambda$.
+
+Si $\rho>1$, el sistema es inestable pues hay más llegadas de las que el servidor es capaz de gestionar y la cola crecerá indefinidamente.
+
+La simulación de este sistema con simmer es muy sencilla.
+
+```{r}
+set.seed(1234)
+lambda=2
+mu=4
+rho=lambda/mu
+
+mm1.cajero=trajectory() %>%
+  seize("cajero",amount=1) %>%
+  timeout(function() rexp(1,mu)) %>%
+  release("cajero",amount=1)
+
+mm1.env=simmer() %>%
+  add_resource("cajero",capacity=1,queue_size=Inf) %>%
+  add_generator("cliente",mm1.cajero,function() rexp(1,lambda)) %>%
+  run(until=2000) 
+```
+
+
+```{r}
+resources=get_mon_resources(mm1.env)
+arrivals=get_mon_arrivals(mm1.env)
+plot(resources, metric="usage", "cajero", items = c("server","queue"))
+plot(arrivals, metric="waiting_time")
+plot(arrivals, metric="activity_time")
+```
+
+
+```{r}
+#library(parallel)
+mm1.envs=mclapply(1:100,function(i) { 
+     simmer() %>%
+        add_resource("cajero",capacity=1,queue_size=Inf) %>%
+        add_generator("cliente",mm1.cajero,function() rexp(100,lambda)) %>%
+        run(until=1000/lambda) %>%
+       wrap()
+     }, mc.set.seed=FALSE)
+```
+
+
+```{r}
+mm1.arrivals=get_mon_arrivals(mm1.envs) 
+head(mm1.arrivals)
+```
+
+Con varias réplicas podríamos, por ejemplo, calcular el tiempo medio en el sistema (*end_time-start_time*), y con todas las medias, testar si el tiempo medio es superior o inferior a cualquier valor que marquemos, utilizando en este caso un test t-Student:
+
+```{r}
+# Resolver un test t-student 
+mm1.data=get_mon_arrivals(mm1.envs) %>%
+  group_by(replication) %>%
+  summarise(m=mean(end_time-start_time))
+ggplot(mm1.data,aes(x=replication,y=m))+
+  geom_point()+
+  geom_line()
+t.test(mm1.data$m,mu=0.5,alternative ="greater")
+```
+
+
+```{r}
+# O estudiar la utilización de los recursos,
+mm1.resources=get_mon_resources(mm1.envs)
+plot(mm1.resources, metric="utilization")
+```
+
+
+```{r}
+# O  testar si el tamaño de la cola (o de sujetos en el sistema) ha sido cero (o cualquier otro valor),
+mm1.data=get_mon_resources(mm1.envs) %>%
+  group_by(replication) %>%
+  summarise(n.cola=mean(queue),n.sistema=mean(system))
+ggplot(mm1.data,aes(x=replication,y=n.cola))+
+  geom_point()+
+  geom_line()+
+  geom_point(aes(y=n.sistema),color="blue")+
+  geom_line(aes(y=n.sistema),color="blue")+
+  labs(x="Replicación",y="Usuarios",caption="Figura x. Usuarios en cola (negro) y en el sistema (azul).")
+
+t.test(mm1.data$n.cola,mu=0,alternative = "greater")
+t.test(mm1.data$n.sistema,mu=1,alternative = "greater")
+```
+
+### Gasolinera
+
+El ejemplo de la gasolinera es ofrecido en [Ucar (2020b)](https://r-simmer.org/articles/simmer-07-ctmc.html) como una ejemplificación de un proceso de cadena de markov continuo en el tiempo.
+Una gasolinera tiene un único surtidor y no dispone de espacio de espera para los vehículos (si un vehículo llega mientras otro está utilizando el surtidor, ha de marcharse).
+Los vehículos llegan a la gasolinera según un proceso de Poisson de razón $\lambda=3/20$ vehículos por minuto.
+De los vehículos que llegan, el 75% son coches y el resto motocicletas.
+El tiempo de carga de combustible responde a una distribución exponencial con media 8 minutos para los coches y 3 para las motocicletas.
+
+Recordemos que un proceso de Poisson de parámetro $\lambda$ implica una distribución de Poisson $Po(\lambda t)$ para el número de usuarios del sistema transcurrido un tiempo $t$ y una distribución $Exp(\lambda)$ para los tiempos entre llegadas de los usuarios.
+
+Puesto que se trata de un proceso continuo en el tiempo, definimos una función que ejecuta el proceso hasta un instante $t$.
+El único surtidor de la gasolinera constituye el recurso del proceso, con capacidad 1 y tamaño de la cola 0, y las llegadas de vehículos se generan según una distribución $Exp(\lambda)$.
+Al producirse una llegada, se deriva al surtidor, especificando `amount=1` para provocar que si está ocupado, el vehículo se marcha (es rechazado).
+Puesto que el tiempo de recarga de combustible depende de si el vehículo es coche o motocicleta, y estos llegan en una proporción 3 a 1 (75% coches-25% motos), el tiempo de permanencia en el surtidor especificado con `timeout` se genera con probabilidad 0.75 con una $Exp(1/8)$ y con probabilidad 0.25 con una $Exp(1/3)$.
+Transcurrido ese tiempo, el vehículo abandona el sistema.
+
+```{r}
+ recarga<- function(t) {
+  vehiculo <- trajectory() %>%
+    seize("surtidor", amount=1) %>%
+    timeout(function() {
+      if (runif(1) < p) rexp(1, mu[1])  # coche
+      else rexp(1, mu[2])               # moto
+    }) %>%
+    release("surtidor", amount=1)
+
+simmer() %>%
+    add_resource("surtidor", capacity=1, queue_size=0) %>%
+    add_generator("vehiculo", vehiculo, function() rexp(1, lambda)) %>%
+    run(until=t)
+ }
+```
+
+
+```{r}
+t=5000
+lambda=3/20
+mu=c(1/8,1/3)
+p=0.75
+ 
+gasolinera=recarga(t) 
+llegadas=get_mon_arrivals(gasolinera)
+surtidor=get_mon_resources(gasolinera)
+plot(llegadas, metric="activity_time")
+plot(surtidor, "usage","surtidor",items="system")+
+  geom_hline(yintercept=0.5)
+```
