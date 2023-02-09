@@ -15,7 +15,7 @@ library(tidyverse)
 
 ```{r}
 getwd()
-setwd("~/Dropbox/ESTADISTICA/SIMPROSIST/clases_1477/sintaxis1477")
+setwd("~/Dropbox/ESTADISTICA/SIMPROSIST/sintaxis1477")
 ```
 
 1.  Borra todos los elementos en el espacio de trabajo.
@@ -633,7 +633,9 @@ unlist(lapply(mydata_df,mean,na.rm=TRUE))
 1.  En el data.frame `Loblolly`, utiliza la variable `Seed` para calcular la media de las restantes variables en cada una de las categorías.
 
 ```{r}
-lapply(mydata_df,mean,na.rm=TRUE)
+colnames(Loblolly)
+tapply(Loblolly$height,Loblolly$Seed,mean,na.rm=TRUE)
+tapply(Loblolly$age,Loblolly$Seed,mean,na.rm=TRUE)
 
 ```
 
