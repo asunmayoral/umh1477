@@ -5,91 +5,180 @@ format: html
 editor: visual
 ---
 
-## Tibbles y pipes
+## Tibbles, pipes, dplyr y ggplot2
 
-En tibbles la aplicación de funciones se suele hacer a través de 'pipes' (librería `dplyr` en `tidyverse`).
+El procesado de datos con R es más eficiente realizarlo con la librería `dplyr`, en el paquete `tidyverse`, que opera con un `tibbles` y `pipes` para secuenciar funciones. 
 
-### Operaciones básicas
+## Datos: USArrests
+Vamos a trabajar con la base de datos `USArrests` , que tiene las variables:
 
-1. Visualiza las primeras filas del tibble `mydata`. Añade una nueva variable llamada 'no' que se obtenga sumando las columnas 'nox' y 'no2'. Calcula la dimensión de la base de datos.
+-   Murder: arrestos por asesinato (por 100.000)
+-   Assault: arrestos por asaltos (por 100.000)
+-   UrbanPop: porcentaje de población urbana
+-   Rape: arrestos por violación (por 100.000)
+
+1. Carga el data.frame.
+1. Guarda en un vector los nombres de las filas ('estados')
+1. Transforma en tibble el data.frame ('datos').
+1. Asigna 'estados' como nombres de las filas. Comprueba que se guardaron.
+1. Visualiza 'datos'.
 
 ```{r}
 library(tidyverse)
-data(mydata,package="openair")
-
-head(mydata)
-mydata %>%
-  mutate(no=nox+no2) %>%
-  head
-#mydata no cambia
-dim(mydata)
+data("USArrests")
+class(USArrests)
+head(USArrests)
+estados=rownames(USArrests)
+datos=as_tibble(USArrests)
+rownames(datos)=estados
+rownames(datos)
+head(datos)
 ```
 
-1. Si queremos conservar esta nueva variable, genera un nuevo tibble que incluya solo las variables 'date', 'nox', 'no2' y esta variable, y llámalo 'mydata_w'.
-```{r}
-mydata_w = mydata %>%
-  select(date,nox,no2) %>%
-  mutate(no=nox+no2)
-head(mydata_w)
-```
-1. Sobre mydata_w, convierte a fecha (con la librería 'lubridate' y la función `as_date`), la columna 'date'.
-```{r}
-library(lubridate)
-mydata_w = mydata_w %>%
-  mutate(date=as_date(date,tz=NULL))
-head(mydata_w)
-```
+## Básicos en dplyr
 
-1. Crea ahora una nueva variable 'date_c' que identifique por el año a cada uno de los registros (categorías). Guárdala en mydata_w
+Hay una serie de funciones básicas en la librería `dplyr`, con la que gestiona el procesado de datos. Estas funciones son:
 
-```{r}
-mydata_w=mydata_w %>%
-  mutate(date_c=as.factor(year(date)))  
-```
+Afectan a filas:
+- `filter()` elige filas basado en valores de las columnas
+- `slice()` elige filas basado en localización; `slice_head()`,`slice_tail()`, `slice_sample()`
+- `arrange()` cambia el orden de las filas
 
-1. Selecciona las filas que correspondan a los años 1998 y 1999. Guárdalo en mydata_w89.
-```{r}
-mydata_w89 =mydata_w %>% 
-  filter(date_c %in% c("1998","1999"))
-dim(mydata_w89)
-```
+Afectan a columnas:
+- `select()` incluye ciertas columnas
+- `rename()` cambia el nombre de las columnas
+- `mutate()` crea nuevas columnas
+- `relocate()` cambia el orden de las columnas
 
+Grupos de filas:
+- `summarise()` colapsa un grupo en una sola fila
 
-### Datos faltantes
-1.  Calcula cuántos datos faltantes tienes en cada columna del tibble `mydata_sel`.
+El operador pipe `%>%` funciona aplicando funciones a un tibble, sin necesidad de utilizar su nombre mas que al inicio. Si queremos trabajar más tarde con el resultado, habremos de asignarlo a un objeto.
+
+1. Elige las filas en las que Urbanpop>50.
+1. Elige 10 filas al azar.
+1. Cambia el orden de las filas ordenando por Urbanpop.
 
 ```{r}
-summary(mydata_sel)
+datos %>% 
+  filter(UrbanPop>50) %>%
+  # slice(10:20) # selecciona las filas 10 a 20
+  # slice_tail(n=10) # selecciona las 10 últimas filas
+  slice_sample(n=10) %>%
+  arrange(UrbanPop)
 ```
 
-1.  Calcula el promedio de las columnas de `mydata_sel` sin considerar los valores faltantes.
+- `select()` incluye ciertas columnas
+- `rename()` cambia el nombre de las columnas
+- `mutate()` crea nuevas columnas
+- `relocate()` cambia el orden de las columnas
+
+
+1. Convierte en variable (columna) los nombres de las filas y llámala 'estados'.
+1. Selecciona las variables 'estados', 'UrbanPop' y 'Murder'.
+1. Renombra la variable 'estados' y llámala 'States'.
+1. Reordena la variable Murder para que aparezca la primera
+```{r}
+datos %>%  
+  rownames_to_column("estados") %>%
+  dplyr::select(estados,UrbanPop,Murder) %>%
+  dplyr::rename(States=estados) %>%
+  dplyr::relocate(States,.after=last_col())
+  #dplyr::relocate(Murder,.before=States)
+```
+## Agrupaciones
+1. Calcula el número medio de arrestos por asesinato (en tantos por 100.000). Da también una medida de error o dispersión.
+1. Crea una variable de clasificación, 'urban',  que identifique los estados con un porcentaje de población urbana al menos del 70% (y los que están por debajo).
+1. Calcula el número medio de arrestos (por todas las causas) en los estados con al menos el 70% de población urbana y con menos del 70%.
+```{r}
+datos %>% summarise(m=mean(Murder),rango=range(Murder),s=sd(Murder))
+colMeans(datos)
+
+datos %>%
+  mutate(urban=cut(UrbanPop,breaks=c(0,70,100),right = FALSE,include.lowest = TRUE)) %>%
+  group_by(urban) %>%
+  summarise(m_Murder=mean(Murder),m_Assault=mean(Assault),m_Rape=mean(Rape))
+```
+
+## Combinación de ficheros
+
+Descargamos datos de 2021 sobre [diversidad étnica](https://www.kff.org/other/state-indicator/distribution-by-raceethnicity/?currentTimeframe=0&sortModel=%7B%22colId%22:%22Location%22,%22sort%22:%22asc%22%7D) en los diversos estados de los Estados Unidos, y los cargamos. Intentaremos pegarlos a nuestra base de datos con el fin de investigar si hay relaciones también con la composición social de los estados.
+
+1. Carga la base de datos 'ethnic.csv'.
+1. Verifica cómo se llama la columna que identifica los estados, y crea una columna con ese nombre en 'datos', a partir de los nombres de las filas.
+1. Combina las dos bases de datos, utilizando 'datos' como principal.
+1. Renombra las columnas, 'American.Indian.Alaska.Native' y 'Native.Hawaiian.Other.Pacific.Islander', por 'Native.Amer' y 'Native.Islands' respectivamente.
+1. Elimina las dos últimas columnas (Total y Footnotes).
+1. Guarda la nueva base de datos en 'datos_ethnic' y visualízala.
 
 ```{r}
-mydata_sel %>%
-  summarise_all(funs(mean(.,na.rm=TRUE)))
+ethnic = read.csv("ethnicity.csv")
+head(ethnic)
+rownames(datos)
+
+datos_ethnic = datos %>%
+  rownames_to_column("Location") %>%
+  left_join(ethnic,by="Location") %>%
+  rename('Native.Amer' ='American.Indian.Alaska.Native',
+         'Native.Islands'='Native.Hawaiian.Other.Pacific.Islander')  %>%
+  dplyr::select(-Total,-Footnotes)
+head(datos_ethnic)
+
 ```
 
-1.  Guarda en un objeto llamado `faltantes` el número de datos faltantes en cada columna.
+Algunos valores en las nuevas columnas son "N/A" y ello provoca que las variables sean de tipo carácter.
+1. Convierte a factor la variable 'Location'.
+1. Convierte a variables numéricas las variables raciales que se han cargado como carácter. Verifica que los valores faltantes se convierten correctamente.
+1. Transforma los valores NA a cero.
+1. Ordena los estados por la proporción de población blanca.
+1. Guárdalo todo en una bd llamada 'datos_clean'.
 
 ```{r}
-faltantes = mydata_sel %>%
-  summarise_all(funs(sum(is.na(.))))
-faltantes
+datos_clean=datos_ethnic %>%
+  mutate(Location=as.factor(Location))%>%
+  mutate_if(is.character,as.double) %>%
+  replace(is.na(.),0)%>%
+  arrange(White)
+datos_clean
 ```
+## Gráficos
+Queremos ahora visualizar en un diagrama de barras el reparto étnico de los diferentes estados. Trabajamos ya con 'datos_clean'.
 
-1.  Elimina los registros (filas) con algún dato faltante y guarda el nuevo objeto sin faltantes en `mydata_sel_sinna`. Verifica que ya no hay valores faltantes.
-
+1. Traslada primero todas las variables étnicas a dos columnas: una que identifique la raza y otra que contenga la información de la proporción que representa en cada estado.
 ```{r}
-mydata_sel_sinna=mydata_sel %>% 
-  drop_na()
-summary(mydata_sel_sinna)
+# identificamos las columnas étnicas
+colnames(datos_clean) # 6 a 12
+datos_clean %>%
+  pivot_longer(cols=6:12,names_to="Race",values_to = "RaceProp") %>%
+  ggplot(aes(x=Location,y=RaceProp,fill=Race))+
+           geom_bar(stat="identity")+
+          scale_fill_brewer(palette="Spectral")+
+            coord_flip()
 ```
-
-1.  Sustituye los valores faltantes de `mydata_sel` con el promedio de valores en la columna correspondiente (primero has de cambiar a `double` las columnas `integer`). Llámalo `mydata_sel_rep`. Verifica que ya no hay valores faltantes.
-
+1. Representa ahora un gráfico de dispersión para buscar alguna relación entre el número total de detenciones en cada estado, y la proporción de población blanca.
+1. Hazlo también con la proporción de población negra.
 ```{r}
-mydata_sel_rep = mydata_sel %>%
-  mutate_if(is.integer,as.double) %>%
-  replace_na(as.list(colMeans(.,na.rm=TRUE)))
-summary(mydata_sel_rep)
+datos_clean %>%
+  mutate(detenciones=Murder+Rape+Assault)%>%
+  ggplot(aes(x=White, y=detenciones ))+
+  geom_point(color="blue")+
+  geom_smooth()+
+  geom_point(aes(x=Black ,y=detenciones),color="red")+
+  geom_smooth(aes(x=Black,y= detenciones),color="red")+
+  geom_point(aes(x=Hispanic ,y=detenciones),color="green3")+
+  geom_smooth(aes(x=Hispanic,y= detenciones),color="green3")+
+  labs(x="Proporción de población",y="Número total de detenciones",
+       title="Relación raza-detenciones")+
+  annotate(geom="text", x=0.75, y=250, label="White",color="blue")+
+  annotate(geom="text", x=0.2, y=320, label="Black",color="red")+
+  annotate(geom="text", x=0.35, y=350, label="Hispanic",color="green3")+
+  xlim(c(0,1))
+  
+
 ```
+
+## Referencias
+
+- [STHDA: ggplot2 essentials](http://www.sthda.com/english/wiki/ggplot2-essentials)
+- [dplyr Tutorial](https://dplyr.tidyverse.org/articles/dplyr.html)
+- [Introduction to dplyr](https://cran.r-project.org/web/packages/dplyr/vignettes/dplyr.html)
