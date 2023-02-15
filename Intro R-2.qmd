@@ -7,9 +7,10 @@ editor: visual
 
 ## Tibbles, pipes, dplyr y ggplot2
 
-El procesado de datos con R es más eficiente realizarlo con la librería `dplyr`, en el paquete `tidyverse`, que opera con un `tibbles` y `pipes` para secuenciar funciones. 
+El procesado de datos con R es más eficiente realizarlo con la librería `dplyr`, en el paquete `tidyverse`, que opera con un `tibbles` y `pipes` para secuenciar funciones.
 
 ## Datos: USArrests
+
 Vamos a trabajar con la base de datos `USArrests` , que tiene las variables:
 
 -   Murder: arrestos por asesinato (por 100.000)
@@ -17,11 +18,11 @@ Vamos a trabajar con la base de datos `USArrests` , que tiene las variables:
 -   UrbanPop: porcentaje de población urbana
 -   Rape: arrestos por violación (por 100.000)
 
-1. Carga el data.frame.
-1. Guarda en un vector los nombres de las filas ('estados')
-1. Transforma en tibble el data.frame ('datos').
-1. Asigna 'estados' como nombres de las filas. Comprueba que se guardaron.
-1. Visualiza 'datos'.
+1.  Carga el data.frame.
+2.  Guarda en un vector los nombres de las filas ('estados')
+3.  Transforma en tibble el data.frame ('datos').
+4.  Asigna 'estados' como nombres de las filas. Comprueba que se guardaron.
+5.  Visualiza 'datos'.
 
 ```{r}
 library(tidyverse)
@@ -40,24 +41,17 @@ head(datos)
 Hay una serie de funciones básicas en la librería `dplyr`, con la que gestiona el procesado de datos. Estas funciones son:
 
 Afectan a filas:
-- `filter()` elige filas basado en valores de las columnas
-- `slice()` elige filas basado en localización; `slice_head()`,`slice_tail()`, `slice_sample()`
-- `arrange()` cambia el orden de las filas
 
-Afectan a columnas:
-- `select()` incluye ciertas columnas
-- `rename()` cambia el nombre de las columnas
-- `mutate()` crea nuevas columnas
-- `relocate()` cambia el orden de las columnas
+-   `filter()` elige filas basado en valores de las columnas
+-   `slice()` elige filas basado en localización; `slice_head()`,`slice_tail()`, `slice_sample()`
+-   `arrange()` cambia el orden de las filas
 
-Grupos de filas:
-- `summarise()` colapsa un grupo en una sola fila
 
 El operador pipe `%>%` funciona aplicando funciones a un tibble, sin necesidad de utilizar su nombre mas que al inicio. Si queremos trabajar más tarde con el resultado, habremos de asignarlo a un objeto.
 
-1. Elige las filas en las que Urbanpop>50.
-1. Elige 10 filas al azar.
-1. Cambia el orden de las filas ordenando por Urbanpop.
+1.  Elige las filas en las que Urbanpop\>50.
+2.  Elige 10 filas al azar.
+3.  Cambia el orden de las filas ordenando por Urbanpop.
 
 ```{r}
 datos %>% 
@@ -68,16 +62,19 @@ datos %>%
   arrange(UrbanPop)
 ```
 
-- `select()` incluye ciertas columnas
-- `rename()` cambia el nombre de las columnas
-- `mutate()` crea nuevas columnas
-- `relocate()` cambia el orden de las columnas
+Afectan a columnas:
+
+-   `select()` incluye ciertas columnas
+-   `rename()` cambia el nombre de las columnas
+-   `mutate()` crea nuevas columnas
+-   `relocate()` cambia el orden de las columnas
 
 
-1. Convierte en variable (columna) los nombres de las filas y llámala 'estados'.
-1. Selecciona las variables 'estados', 'UrbanPop' y 'Murder'.
-1. Renombra la variable 'estados' y llámala 'States'.
-1. Reordena la variable Murder para que aparezca la primera
+1.  Convierte en variable (columna) los nombres de las filas y llámala 'estados'.
+2.  Selecciona las variables 'estados', 'UrbanPop' y 'Murder'.
+3.  Renombra la variable 'estados' y llámala 'States'.
+4.  Reordena la variable Murder para que aparezca la primera
+
 ```{r}
 datos %>%  
   rownames_to_column("estados") %>%
@@ -86,10 +83,18 @@ datos %>%
   dplyr::relocate(States,.after=last_col())
   #dplyr::relocate(Murder,.before=States)
 ```
+
 ## Agrupaciones
-1. Calcula el número medio de arrestos por asesinato (en tantos por 100.000). Da también una medida de error o dispersión.
-1. Crea una variable de clasificación, 'urban',  que identifique los estados con un porcentaje de población urbana al menos del 70% (y los que están por debajo).
-1. Calcula el número medio de arrestos (por todas las causas) en los estados con al menos el 70% de población urbana y con menos del 70%.
+
+Grupos de filas: 
+
+- `summarise()` colapsa un grupo en una sola fila
+- `group_by()` agrupa datos por un factor
+
+1.  Calcula el número medio de arrestos por asesinato (en tantos por 100.000). Da también una medida de error o dispersión.
+2.  Crea una variable de clasificación, 'urban', que identifique los estados con un porcentaje de población urbana al menos del 70% (y los que están por debajo).
+3.  Calcula el número medio de arrestos (por todas las causas) en los estados con al menos el 70% de población urbana y con menos del 70%.
+
 ```{r}
 datos %>% summarise(m=mean(Murder),rango=range(Murder),s=sd(Murder))
 colMeans(datos)
@@ -104,12 +109,12 @@ datos %>%
 
 Descargamos datos de 2021 sobre [diversidad étnica](https://www.kff.org/other/state-indicator/distribution-by-raceethnicity/?currentTimeframe=0&sortModel=%7B%22colId%22:%22Location%22,%22sort%22:%22asc%22%7D) en los diversos estados de los Estados Unidos, y los cargamos. Intentaremos pegarlos a nuestra base de datos con el fin de investigar si hay relaciones también con la composición social de los estados.
 
-1. Carga la base de datos 'ethnic.csv'.
-1. Verifica cómo se llama la columna que identifica los estados, y crea una columna con ese nombre en 'datos', a partir de los nombres de las filas.
-1. Combina las dos bases de datos, utilizando 'datos' como principal.
-1. Renombra las columnas, 'American.Indian.Alaska.Native' y 'Native.Hawaiian.Other.Pacific.Islander', por 'Native.Amer' y 'Native.Islands' respectivamente.
-1. Elimina las dos últimas columnas (Total y Footnotes).
-1. Guarda la nueva base de datos en 'datos_ethnic' y visualízala.
+1.  Carga la base de datos 'ethnic.csv'.
+2.  Verifica cómo se llama la columna que identifica los estados, y crea una columna con ese nombre en 'datos', a partir de los nombres de las filas.
+3.  Combina las dos bases de datos, utilizando 'datos' como principal.
+4.  Renombra las columnas, 'American.Indian.Alaska.Native' y 'Native.Hawaiian.Other.Pacific.Islander', por 'Native.Amer' y 'Native.Islands' respectivamente.
+5.  Elimina las dos últimas columnas (Total y Footnotes).
+6.  Guarda la nueva base de datos en 'datos_ethnic' y visualízala.
 
 ```{r}
 ethnic = read.csv("ethnicity.csv")
@@ -126,12 +131,7 @@ head(datos_ethnic)
 
 ```
 
-Algunos valores en las nuevas columnas son "N/A" y ello provoca que las variables sean de tipo carácter.
-1. Convierte a factor la variable 'Location'.
-1. Convierte a variables numéricas las variables raciales que se han cargado como carácter. Verifica que los valores faltantes se convierten correctamente.
-1. Transforma los valores NA a cero.
-1. Ordena los estados por la proporción de población blanca.
-1. Guárdalo todo en una bd llamada 'datos_clean'.
+Algunos valores en las nuevas columnas son "N/A" y ello provoca que las variables sean de tipo carácter. 1. Convierte a factor la variable 'Location'. 1. Convierte a variables numéricas las variables raciales que se han cargado como carácter. Verifica que los valores faltantes se convierten correctamente. 1. Transforma los valores NA a cero. 1. Ordena los estados por la proporción de población blanca. 1. Guárdalo todo en una bd llamada 'datos_clean'.
 
 ```{r}
 datos_clean=datos_ethnic %>%
@@ -141,10 +141,13 @@ datos_clean=datos_ethnic %>%
   arrange(White)
 datos_clean
 ```
+
 ## Gráficos
+
 Queremos ahora visualizar en un diagrama de barras el reparto étnico de los diferentes estados. Trabajamos ya con 'datos_clean'.
 
-1. Traslada primero todas las variables étnicas a dos columnas: una que identifique la raza y otra que contenga la información de la proporción que representa en cada estado.
+1.  Traslada primero todas las variables étnicas a dos columnas: una que identifique la raza y otra que contenga la información de la proporción que representa en cada estado.
+
 ```{r}
 # identificamos las columnas étnicas
 colnames(datos_clean) # 6 a 12
@@ -155,8 +158,10 @@ datos_clean %>%
           scale_fill_brewer(palette="Spectral")+
             coord_flip()
 ```
-1. Representa ahora un gráfico de dispersión para buscar alguna relación entre el número total de detenciones en cada estado, y la proporción de población blanca.
-1. Hazlo también con la proporción de población negra.
+
+1.  Representa ahora un gráfico de dispersión para buscar alguna relación entre el número total de detenciones en cada estado, y la proporción de población blanca.
+2.  Hazlo también con la proporción de población negra.
+
 ```{r}
 datos_clean %>%
   mutate(detenciones=Murder+Rape+Assault)%>%
@@ -179,6 +184,6 @@ datos_clean %>%
 
 ## Referencias
 
-- [STHDA: ggplot2 essentials](http://www.sthda.com/english/wiki/ggplot2-essentials)
-- [dplyr Tutorial](https://dplyr.tidyverse.org/articles/dplyr.html)
-- [Introduction to dplyr](https://cran.r-project.org/web/packages/dplyr/vignettes/dplyr.html)
+-   [STHDA: ggplot2 essentials](http://www.sthda.com/english/wiki/ggplot2-essentials)
+-   [dplyr Tutorial](https://dplyr.tidyverse.org/articles/dplyr.html)
+-   [Introduction to dplyr](https://cran.r-project.org/web/packages/dplyr/vignettes/dplyr.html)

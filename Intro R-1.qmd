@@ -449,12 +449,14 @@ Para definir una función basta utilizar la sintaxis siguiente:
 1.  Crea una función que calcule y devuelva el área de un círculo de radio 'r' (que se introduce como argumento). El área ha de estar redondeada a dos decimales. Pruébala.
 
 ```{r}
-# Área del cuadrado
+# Área del círculo
 area_circulo=function(r){
+  # r es el radio del círculo
   area=pi*r^2
   return(round(area,2))
 }
-area_circulo(4)
+resul=area_circulo(4)
+resul
 ```
 
 1.  Crea una función que simule 'n' valores de una distribución Uniforme(a,b), introduciendo también a y b como argumentos, y devuelva una lista con la suma, el valor máximo y el valor mínimo simulados.
@@ -476,15 +478,15 @@ Para incorporar condiciones podemos utilizar:
 
 -   `ifelse()` si queremos ejecutar dos acciones simples en función de si se da o no cierta condición;
 -   `if(){} else{}`, si queremos ejecutar varias acciones cuando se da y cuando no se da cierta condición;
--   `if(){} else if{} else{}`, cuando se pueden dan varias alternativas en la condición propuesta (no solo verdadero/falso).
+-   `if(){} else if(){} else{}`, cuando se pueden dan varias alternativas en la condición propuesta (no solo verdadero/falso).
 
 1.  Simula un valor uniforme(0,1). Crea una variable que tome el valor 0 si dicho valor está por debajo de 0.5 (o es igual) y 1 si está por encima. Muestra el valor simulado (redondeado a 2 decimales) y el creado.
 
 ```{r}
 u=runif(1)
 x=ifelse(u<=0.5,0,1)
-cat(paste("Valor simulado:",round(u,2)))
-cat(paste("\n Valor creado:",x))
+cat("Valor simulado:",round(u,2))
+cat("\n Valor creado:",x)
 
 ```
 
@@ -493,7 +495,7 @@ cat(paste("\n Valor creado:",x))
 ```{r}
 tiempo=function(){
   t=round(runif(1,-10,45))
-  cat(paste("La temperatura actual es de",t,"grados centígrados. \n"))
+  cat("La temperatura actual es de",t,"grados centígrados. \n")
   if(t<10)
     cat("Hoy hace fresco")
   else if (t<25)
@@ -510,7 +512,7 @@ tiempo()
 ```{r}
 simulador_3cat = function(n,v){
 u=runif(n)
-x=1*(u<=v[1])+2*(u>v[1] & u<v[2])+3*(u>v[2])
+x=1*(u<=v[1])+2*(u>v[1] & u<=v[2])+3*(u>v[2])
 return(x)
 }
 
@@ -533,7 +535,7 @@ quediaeshoy = function(){
 dias_semana=c("lunes","martes","miércoles","jueves","viernes","sábado","domingo")
 
 for(dias in dias_semana)
-  cat(paste("\n Hoy es",dias))
+  cat("\n Hoy es",dias)
 }
 
 quediaeshoy()
@@ -545,12 +547,16 @@ quediaeshoy()
 quediaeshoy_2 = function(){
 dias_mes=1:30
 dia = sample(dias_mes,1)
-cat(paste("Por azar llegaremos hasta el día",dia))
-dia_hoy = 0. # inicialización
-while(dia_hoy < dia){
-  dia_hoy=dia_hoy+1. # corre el contador
-  cat(paste("\n Hoy es",dia_hoy))
-    }
+cat("Por azar llegaremos hasta el día",dia)
+dia_hoy = 0 # inicialización
+#while(dia_hoy < dia){
+#  dia_hoy=dia_hoy+1. # corre el contador
+#  cat(paste("\n Hoy es",dia_hoy))
+#    }
+#for(i in 1:dia)
+# cat("Hoy es ",i)
+x=paste("Hoy es dia",1:dia,"\n")
+cat(x)
 }
 
 quediaeshoy_2()
@@ -606,6 +612,7 @@ Cuando programamos una función y la queremos aplicar a cada uno de los elemento
 
 ```{r}
 l2=list(a1=1:6,a2=10:0)
+l2
 lapply(l2,mean)
 sapply(l2,sum)
 ```
@@ -620,19 +627,22 @@ Cuando programamos una función y la queremos aplicar a cada una de las filas o 
 4.  Transforma a vector el resultado que obtuviste al aplicar `lapply`.
 
 ```{r}
+mydata_df
 colMeans(mydata_df)
 colMeans(mydata_df,na.rm=TRUE)
 
 apply(mydata_df,2,mean,na.rm=TRUE)
-apply(mydata_df,2,mean,na.rm=TRUE)
 
 lapply(mydata_df,mean,na.rm=TRUE)
+sapply(mydata_df,mean,na.rm=TRUE)
 unlist(lapply(mydata_df,mean,na.rm=TRUE))
 ```
 
 1.  En el data.frame `Loblolly`, utiliza la variable `Seed` para calcular la media de las restantes variables en cada una de las categorías.
 
 ```{r}
+head(Loblolly)
+table(Loblolly$Seed)
 colnames(Loblolly)
 tapply(Loblolly$height,Loblolly$Seed,mean,na.rm=TRUE)
 tapply(Loblolly$age,Loblolly$Seed,mean,na.rm=TRUE)
