@@ -42,10 +42,9 @@ Hay una serie de funciones básicas en la librería `dplyr`, con la que gestiona
 
 Afectan a filas:
 
--   `filter()` elige filas basado en valores de las columnas
+-   `filter()` elige filas basado en valores de las columnas (`filter(data_set, <expression1>, <expression2>, ...)`). Para usar el filtrado de manera efectiva, se debe saber cómo seleccionar las observaciones que se desea utilizando los operadores de comparación. R proporciona el paquete estándar: $>$ (mayor que), $>=$ (mayor o igual que), $<$ (menor que), $<=$ (menor o igual que), $!=$ (no igual a), y $==$ (igual a).
 -   `slice()` elige filas basado en localización; `slice_head()`,`slice_tail()`, `slice_sample()`
--   `arrange()` cambia el orden de las filas
-
+-   `arrange()` cambia el orden de las filas (`arrange(data_set, varname1, varname2, ...)`). Podemos introducir la función `desc()` para ordenar de forma descendente por la variable seleccionada.
 
 El operador pipe `%>%` funciona aplicando funciones a un tibble, sin necesidad de utilizar su nombre mas que al inicio. Si queremos trabajar más tarde con el resultado, habremos de asignarlo a un objeto.
 
@@ -64,11 +63,10 @@ datos %>%
 
 Afectan a columnas:
 
--   `select()` incluye ciertas columnas
+-   `select()` incluye ciertas columnas (`select(data_set, varname1, varname2, ...)`).
 -   `rename()` cambia el nombre de las columnas
--   `mutate()` crea nuevas columnas
+-   `mutate()` crea nuevas columnas (`mutate(data_set, <expression1>, <expression2>, ...)`). El listado de funciones habituales que podemos usar con la función `mutate()` son: Operadores aritméticos: `+, -, *, /, ^`; Funciones logaritmo: `log()`, `log2()`, `log10()`; Funciones de agregación: `cumsum()` (suma acumulada), `cumprod()` (producto acumulado), `cummin()` (mínimo acumulado), `cummax()` (máximo acumulado), `cummean()` (media acumulada); Comparaciones lógicas: `<, <=, >, >=, !=`.
 -   `relocate()` cambia el orden de las columnas
-
 
 1.  Convierte en variable (columna) los nombres de las filas y llámala 'estados'.
 2.  Selecciona las variables 'estados', 'UrbanPop' y 'Murder'.
@@ -86,10 +84,17 @@ datos %>%
 
 ## Agrupaciones
 
-Grupos de filas: 
+Grupos de filas:
 
-- `summarise()` colapsa un grupo en una sola fila
-- `group_by()` agrupa datos por un factor
+-   `summarise()` colapsa un grupo en una sola fila. Las funciones más habituales que se utilizan con `summarise()` son:
+
+    -   Localización: `mean()` (media), `median()` (mediana);
+    -   Escala: `sd()` (desviación típica), `IQR()` (rango intercuartílico);
+    -   Rango: `min()` (mínimo), `max()` (máximo), `range()` (rango), `quantile()` (cuantil);
+    -   Posición: `first()` (primero), `last()` (último), `nth()` (posición n-ésima);
+    -   Conteo: `n()` (número de casos), `n_distinct()` (número de casos distintos).
+
+-   `group_by()` agrupa datos por un factor
 
 1.  Calcula el número medio de arrestos por asesinato (en tantos por 100.000). Da también una medida de error o dispersión.
 2.  Crea una variable de clasificación, 'urban', que identifique los estados con un porcentaje de población urbana al menos del 70% (y los que están por debajo).
