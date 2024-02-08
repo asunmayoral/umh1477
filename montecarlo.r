@@ -32,5 +32,5 @@ if(print==TRUE){
 ')
 }
 df=c(estim,ic.low,ic.up)
-return(df)
+return(invisible(df))
 }
