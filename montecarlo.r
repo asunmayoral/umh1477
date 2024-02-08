@@ -24,8 +24,8 @@ estim = round(mean(z),dec)
 error = sd(z)*sqrt(n-1)/n
 alpha=0.95 # nivel de confianza
 z_alpha= qnorm(1-alpha/2)
-ic.low = round(estim - z_alpha*error,3)
-ic.up = round(estim + z_alpha*error,3)
+ic.low = round(estim - z_alpha*error,dec)
+ic.up = round(estim + z_alpha*error,dec)
 if(print==TRUE){
   cat('
  Estimación MC = ',estim,'[',ic.low,',',ic.up,']
