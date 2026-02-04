@@ -15,6 +15,7 @@ import seaborn as sns
 sns.set_theme(style = 'whitegrid')
 # %config InlineBackend.figure_format = 'retina'
 
+
 #============================================================================================
 # DISTRIBUCIONES DISCRETAS
 #============================================================================================
@@ -308,5 +309,11 @@ def cmtd_matrix_n(mc, n):
   Parámetros de salida:
     - p_n: matriz de transición de n pasos.
   """
+  try:
+    import pydtmc
+  except ImportError
+    !pip install pydtmc
+    import pydtmc
+    
   mtn  = pydtmc.MarkovChain(np.linalg.matrix_power(mc.p, n), mc.states)
   return pd.DataFrame(mtn.p,columns=mc.states,index=mc.states)
