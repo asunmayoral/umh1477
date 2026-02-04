@@ -61,7 +61,7 @@ def graficar_discreta(x, fx):
   ax[1].set_ylabel('Probabilidad')
   ax[1].set_xlabel('Espacio muestral')
   plt.tight_layout()
-
+#---------------------------------------------------------------------------------------
 # Función para obtener un dataframe con la función de masa de probabilidad y la función de distribución de una variable discreta.
 def distr_discreta(x, fx):
   """
@@ -80,6 +80,22 @@ def distr_discreta(x, fx):
   fdist = [sum(fx[:(l+1)]) for l in range(len(fx))]
   return(pd.DataFrame({"x": x, "fmp":fx, "fdist":fdist}))
 
+#---------------------------------------------------------------------------------------
+# Simular una m.a. de una distribución discreta y devolver media y varianza
+def simula_discreta(x, fx, n):
+  """
+  Función para simular una m.a. de una distribución discreta y devolver
+  media y varianza de los datos simulados.
+  Args:
+    x: valores de la variable discreta
+    fx: función de masa de probabilidad
+
+  Returns
+    Lista con el valor medio y desviación típica de la variable de interés en el periodo n de simulación
+  """
+  muestra = np.random.choice(x, size = n, replace = True, p = fx)
+  resul = [round(muestra.mean(),2), round(muestra.var(),2)]
+  return(resul)
 #============================================================================================
 
 # ESTIMACIÓN MONTE CARLO
@@ -116,9 +132,8 @@ def MC_estim(sims):
 
 def gof_distr(data):
     """
-    Evalúa la bondad de ajuste de múltiples distribuciones utilizando
-    el Test de Kolmogorov-Smirnov y estimación de parámetros por
-    el MÉTODO DE LOS MOMENTOS (MoM).
+    Ajusta y Evalúa la bondad de ajuste de múltiples distribuciones continuas utilizando
+    el Test de Kolmogorov-Smirnov y estimación de parámetros porel MÉTODO DE LOS MOMENTOS (MoM).
     
     Distribuciones: Uniforme, Exponencial, Normal, Gamma, Erlang, Triangular, Weibull.
     """
@@ -309,6 +324,24 @@ def cmtd_matrix_n(mc, n):
   Parámetros de salida:
     - p_n: matriz de transición de n pasos.
   """
+#--------------------------------------------------------------------------------------
+# Matriz de tiempos de ocupación
+def mat_ocupacion_proceso(mc, n):
+  """
+  Función para obtener la matriz de ocupación asocida al proceso mc en n transiciones
+
+  Parámetros de entrada:
+  - mc: proceso
+  - n: número de transiciones
+
+  Parámetros de salida:
+  - mocupa: matriz de ocupacion
+  """
+  mocupa = np.zeros((len(mc.states), len(mc.states)))
+  for i in range(n+1):
+    mocupa += np.linalg.matrix_power(mc.p, i)
+
+  return mocupa
   import pydtmc
   mtn  = pydtmc.MarkovChain(np.linalg.matrix_power(mc.p, n), mc.states)
   return pd.DataFrame(mtn.p,columns=mc.states,index=mc.states)
