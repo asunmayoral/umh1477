@@ -17,6 +17,7 @@ sns.set_theme(style = 'whitegrid')
 
 #============================================================================================
 # DISTRIBUCIONES DISCRETAS
+#============================================================================================
 
 def graficar_discreta(x, fx):
   """
@@ -110,6 +111,7 @@ def MC_estim(sims):
 
 #============================================================================================
 # DISTRIBUCIONES CONTINUAS
+#============================================================================================
 
 def gof_distr(data):
     """
@@ -290,3 +292,21 @@ def gof_distr(data):
     return df_results
   
 #============================================================================================
+# CMTD
+#============================================================================================
+
+# Calcular la matriz de transición de n pasos
+def cmtd_matrix_n(mc, n):
+  """
+  Función para obtener la matriz de transición de n pasos
+  dada un proceso definido con MarkovChain()
+
+  Parámetros de entrada:
+    - mc: proceso definido con MarkovChain()
+    - n: número de saltos.
+
+  Parámetros de salida:
+    - p_n: matriz de transición de n pasos.
+  """
+  mtn  = pydtmc.MarkovChain(np.linalg.matrix_power(mc.p, n), mc.states)
+  return pd.DataFrame(mtn.p,columns=mc.states,index=mc.states)
