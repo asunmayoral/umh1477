@@ -311,7 +311,7 @@ def cmtd_matrix_n(mc, n):
   """
   try:
     import pydtmc
-  except ImportError
+  except ImportError:
     !pip install pydtmc
     import pydtmc 
   mtn  = pydtmc.MarkovChain(np.linalg.matrix_power(mc.p, n), mc.states)
