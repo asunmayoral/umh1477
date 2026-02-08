@@ -127,15 +127,158 @@ def MC_estim(sims):
   return([round(estim,4), round(ic_low,4), round(ic_up,4)])
 
 #============================================================================================
-# DISTRIBUCIONES CONTINUAS
+# DISTRIBUCIONES DISCRETAS GOF
+#============================================================================================
+
+def gof_distr_discrete(data):
+    """
+    Ajusta y Evalúa la bondad de ajuste de distribuciones DISCRETAS utilizando
+    el Test de Kolmogorov-Smirnov (adaptado) y estimación de parámetros por el MÉTODO DE LOS MOMENTOS.
+    
+    Distribuciones: Poisson, Geométrica, Binomial, Binomial Negativa.
+    
+    Nota: El test KS es conservador para datos discretos, pero sirve como referencia rápida.
+    """
+    
+    # 1. Preparación de datos
+    x = np.array(data)
+    x = x[~np.isnan(x)]
+    n_samples = len(x)
+    
+    # Nivel de significancia
+    alpha = 0.05
+    
+    # Momentos Muestrales
+    mu = np.mean(x)
+    var = np.var(x, ddof=1)
+    
+    # Evitar división por cero en casos degenerados
+    if var == 0: var = 1e-6 
+    if mu == 0: mu = 1e-6
+
+    results = []
+
+    # ==============================================================================
+    # 1. Distribución de Poisson
+    # Parámetro: lambda = mu
+    # ==============================================================================
+    # En scipy, el parámetro mu es lambda
+    d_pois, p_pois = stats.kstest(x, 'poisson', args=(mu,))
+    
+    results.append({
+        'Distribución': 'Poisson',
+        'Parámetros': f'Lambda={mu:.2f}',
+        'KS Stat': d_pois,
+        'P-Value': p_pois
+    })
+
+    # ==============================================================================
+    # 2. Distribución Geométrica
+    # Asume definición de 'intentos hasta el éxito' (dominio >= 1).
+    # MoM: Mean = 1/p  => p = 1/Mean
+    # ==============================================================================
+    # Probabilidad estimada
+    p_geom = 1 / mu
+    
+    # Restricción: p debe estar en (0, 1]
+    p_geom = max(min(p_geom, 1.0), 1e-6)
+    
+    d_geom, p_val_geom = stats.kstest(x, 'geom', args=(p_geom,))
+    
+    results.append({
+        'Distribución': 'Geométrica',
+        'Parámetros': f'p={p_geom:.4f}',
+        'KS Stat': d_geom,
+        'P-Value': p_val_geom
+    })
+
+    # ==============================================================================
+    # 3. Distribución Binomial
+    # MoM: Mean = np, Var = np(1-p)
+    # Solo válida si Var < Mean (Subdispersión)
+    # ==============================================================================
+    if var < mu:
+        # 1-p = Var / Mean  =>  p = 1 - (Var/Mean)
+        p_bin = 1 - (var / mu)
+        
+        # n = Mean / p
+        n_est = mu / p_bin
+        
+        # n debe ser entero, redondeamos
+        n_bin = int(round(n_est))
+        
+        # Recalculamos p para ajustar la media con el nuevo n entero
+        p_bin_adj = mu / n_bin if n_bin > 0 else 0
+        p_bin_adj = max(min(p_bin_adj, 1), 0) # Clip 0-1
+
+        d_bin, p_val_bin = stats.kstest(x, 'binom', args=(n_bin, p_bin_adj))
+        
+        results.append({
+            'Distribución': 'Binomial',
+            'Parámetros': f'n={n_bin}, p={p_bin_adj:.2f}',
+            'KS Stat': d_bin,
+            'P-Value': p_val_bin
+        })
+    else:
+        results.append({
+            'Distribución': 'Binomial',
+            'Parámetros': 'No Ajustable (Var >= Media)',
+            'KS Stat': 1.0,
+            'P-Value': 0.0
+        })
+
+    # ==============================================================================
+    # 4. Distribución Binomial Negativa
+    # MoM: Mean = n(1-p)/p, Var = n(1-p)/p^2  (Definición Scipy: Fallos)
+    # Solo válida si Var > Mean (Sobredispersión)
+    # ==============================================================================
+    if var > mu:
+        # p = Mean / Var
+        p_nbin = mu / var
+        
+        # n = (Mean * p) / (1-p)
+        n_val = (mu * p_nbin) / (1 - p_nbin)
+        
+        # En Scipy 'n' (r éxitos) puede ser float, no necesita ser entero
+        d_nbin, p_val_nbin = stats.kstest(x, 'nbinom', args=(n_val, p_nbin))
+        
+        results.append({
+            'Distribución': 'Binomial Negativa',
+            'Parámetros': f'n(r)={n_val:.2f}, p={p_nbin:.2f}',
+            'KS Stat': d_nbin,
+            'P-Value': p_val_nbin
+        })
+    else:
+        results.append({
+            'Distribución': 'Binomial Negativa',
+            'Parámetros': 'No Ajustable (Var <= Media)',
+            'KS Stat': 1.0,
+            'P-Value': 0.0
+        })
+
+    # ==============================================================================
+    # Consolidación
+    # ==============================================================================
+    df_results = pd.DataFrame(results)
+    
+    df_results['¿Ajuste Válido?'] = df_results['P-Value'].apply(
+        lambda p: 'Sí' if p > alpha else 'No (Rechazado)'
+    )
+    
+    df_results = df_results.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+    
+    return df_results
+  
+#============================================================================================
+# DISTRIBUCIONES CONTINUAS GOF
 #============================================================================================
 
 def gof_distr(data):
     """
     Ajusta y Evalúa la bondad de ajuste de múltiples distribuciones continuas utilizando
-    el Test de Kolmogorov-Smirnov y estimación de parámetros porel MÉTODO DE LOS MOMENTOS (MoM).
+    el Test de Kolmogorov-Smirnov y estimación de parámetros por el MÉTODO DE LOS MOMENTOS (MoM).
     
-    Distribuciones: Uniforme, Exponencial, Normal, Gamma, Erlang, Triangular, Weibull.
+    Distribuciones: Uniforme, Exponencial, Normal, Gamma, Erlang, Triangular, Weibull, Log-Normal.
     """
     
     # 1. Preparación de datos y estadísticos básicos
@@ -293,6 +436,32 @@ def gof_distr(data):
     })
 
     # ==============================================================================
+    # 8. Distribución Log-Normal
+    # MoM Analítico:
+    # sigma^2 = ln(1 + var/mu^2)
+    # mu_log = ln(mu) - sigma^2/2
+    # Scipy params: s = sigma, scale = exp(mu_log)
+    # ==============================================================================
+    # Cálculo de los parámetros de la Normal subyacente
+    # phi^2 es el segundo momento crudo E[X^2] = Var + Mean^2
+    phi = np.sqrt(var + mu**2)
+    
+    mu_log = np.log(mu**2 / phi)          # media de ln(x)
+    sigma_log = np.sqrt(np.log(phi**2 / mu**2))  # std de ln(x)
+    
+    scale_log = np.exp(mu_log) # scale es e^mu
+    
+    # KS Test (s es sigma_log, scale es e^mu_log)
+    d_logn, p_logn = stats.kstest(x, 'lognorm', args=(sigma_log, 0, scale_log))
+    
+    results.append({
+        'Distribución': 'Log-Normal',
+        'Parámetros': f's={sigma_log:.2f}, Scale={scale_log:.2f}',
+        'KS Stat': d_logn,
+        'P-Value': p_logn
+    })
+
+    # ==============================================================================
     # Consolidación de Resultados
     # ==============================================================================
     df_results = pd.DataFrame(results)
@@ -306,6 +475,7 @@ def gof_distr(data):
     df_results = df_results.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
     
     return df_results
+    
   
 #============================================================================================
 # CMTD
