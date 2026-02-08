@@ -127,147 +127,162 @@ def MC_estim(sims):
   return([round(estim,4), round(ic_low,4), round(ic_up,4)])
 
 #============================================================================================
-# DISTRIBUCIONES DISCRETAS GOF
+# DISTRIBUCIONES DISCRETAS GOF con chi-cuadrado
 #============================================================================================
 
-def gof_distr_discrete(data):
+def calculate_chi2_robust(data, dist_name, params, n_params_est):
     """
-    Ajusta y Evalúa la bondad de ajuste de distribuciones DISCRETAS utilizando
-    el Test de Kolmogorov-Smirnov (adaptado) y estimación de parámetros por el MÉTODO DE LOS MOMENTOS.
-    
-    Distribuciones: Poisson, Geométrica, Binomial, Binomial Negativa.
-    
-    Nota: El test KS es conservador para datos discretos, pero sirve como referencia rápida.
+    Función auxiliar que realiza el binning (agrupación) dinámico 
+    y normaliza frecuencias para evitar errores de tolerancia en chisquare.
     """
+    # 1. Preparar conteos observados
+    observed_counts = pd.Series(data).value_counts().sort_index()
+    total_n = len(data)
     
-    # 1. Preparación de datos
+    # Rango de evaluación: desde el min hasta el max observado
+    k_values = np.arange(observed_counts.index.min(), observed_counts.index.max() + 1)
+    
+    # 2. Calcular Probabilidades Teóricas (PMF)
+    if dist_name == 'poisson':
+        mu = params[0]
+        probs = stats.poisson.pmf(k_values, mu)
+    elif dist_name == 'geom':
+        p, loc = params
+        probs = stats.geom.pmf(k_values, p, loc=loc)
+    elif dist_name == 'binom':
+        n, p = params
+        probs = stats.binom.pmf(k_values, n, p)
+    elif dist_name == 'nbinom':
+        n, p = params
+        probs = stats.nbinom.pmf(k_values, n, p)
+        
+    # Frecuencias esperadas iniciales
+    expected_freqs = probs * total_n
+    
+    # 3. Mapear observados al rango completo
+    obs_dict = observed_counts.to_dict()
+    observed_freqs = np.array([obs_dict.get(k, 0) for k in k_values])
+    
+    # 4. ALGORITMO DE AGRUPACIÓN (BINNING)
+    obs_grouped = []
+    exp_grouped = []
+    
+    curr_obs = 0
+    curr_exp = 0
+    
+    for o, e in zip(observed_freqs, expected_freqs):
+        curr_obs += o
+        curr_exp += e
+        
+        # Criterio: Acumular hasta que lo esperado sea al menos 5
+        if curr_exp >= 5:
+            obs_grouped.append(curr_obs)
+            exp_grouped.append(curr_exp)
+            curr_obs = 0
+            curr_exp = 0
+            
+    # Manejar el residuo (cola final)
+    if curr_exp > 0:
+        if len(exp_grouped) > 0:
+            exp_grouped[-1] += curr_exp
+            obs_grouped[-1] += curr_obs
+        else:
+            exp_grouped.append(curr_exp)
+            obs_grouped.append(curr_obs)
+
+    # 5. --- CORRECCIÓN CRÍTICA ---
+    # Normalizar las frecuencias esperadas para que sumen EXACTAMENTE lo mismo que las observadas.
+    # Esto corrige el ValueError de scipy y compensa la probabilidad perdida en las colas no observadas.
+    obs_final = np.array(obs_grouped)
+    exp_final = np.array(exp_grouped)
+    
+    if np.sum(exp_final) > 0:
+        exp_final = exp_final * (np.sum(obs_final) / np.sum(exp_final))
+
+    # 6. Test Chi-Cuadrado
+    n_bins = len(exp_final)
+    dof = n_bins - 1 - n_params_est
+    
+    if dof <= 0:
+        # Si no hay suficientes grados de libertad, devolvemos NaN
+        return np.nan, np.nan, f"Bins insuficientes ({n_bins})"
+        
+    chi2_stat, p_val = stats.chisquare(f_obs=obs_final, f_exp=exp_final, ddof=n_params_est)
+    
+    return chi2_stat, p_val, f"DoF={dof} (Bins={n_bins})"
+
+# ------------------------------------------------------------------------------
+# La función maestra
+# ------------------------------------------------------------------------------
+
+def best_fit_discrete(data):
+    """
+    Función Maestra: Ajusta Poisson, Geométrica, Binomial y Binomial Negativa.
+    Retorna DataFrame comparativo ordenado por mejor ajuste.
+    """
     x = np.array(data)
     x = x[~np.isnan(x)]
-    n_samples = len(x)
+    if len(x) == 0: return "Error: No hay datos."
     
-    # Nivel de significancia
-    alpha = 0.05
-    
-    # Momentos Muestrales
+    # Estadísticos
     mu = np.mean(x)
     var = np.var(x, ddof=1)
+    min_val = np.min(x)
     
-    # Evitar división por cero en casos degenerados
-    if var == 0: var = 1e-6 
+    if var == 0: var = 1e-6
     if mu == 0: mu = 1e-6
-
+    
     results = []
-
-    # ==============================================================================
-    # 1. Distribución de Poisson
-    # Parámetro: lambda = mu
-    # ==============================================================================
-    # En scipy, el parámetro mu es lambda
-    d_pois, p_pois = stats.kstest(x, 'poisson', args=(mu,))
     
-    results.append({
-        'Distribución': 'Poisson',
-        'Parámetros': f'Lambda={mu:.2f}',
-        'KS Stat': d_pois,
-        'P-Value': p_pois
-    })
-
-    # ==============================================================================
-    # 2. Distribución Geométrica
-    # Asume definición de 'intentos hasta el éxito' (dominio >= 1).
-    # MoM: Mean = 1/p  => p = 1/Mean
-    # ==============================================================================
-    # Probabilidad estimada
-    p_geom = 1 / mu
+    # 1. POISSON
+    chi2, p, note = calculate_chi2_robust(x, 'poisson', [mu], 1)
+    results.append({'Modelo': 'Poisson', 'Parámetros': f'λ={mu:.2f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
     
-    # Restricción: p debe estar en (0, 1]
-    p_geom = max(min(p_geom, 1.0), 1e-6)
+    # 2. GEOMÉTRICA
+    if min_val == 0:
+        p_geom = 1 / (mu + 1)
+        loc_geom = -1
+        lbl = 'Geom (desde 0)'
+    else:
+        p_geom = 1 / mu
+        loc_geom = 0
+        lbl = 'Geom (desde 1)'
+    chi2, p, note = calculate_chi2_robust(x, 'geom', [p_geom, loc_geom], 1)
+    results.append({'Modelo': lbl, 'Parámetros': f'p={p_geom:.3f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
     
-    d_geom, p_val_geom = stats.kstest(x, 'geom', args=(p_geom,))
-    
-    results.append({
-        'Distribución': 'Geométrica',
-        'Parámetros': f'p={p_geom:.4f}',
-        'KS Stat': d_geom,
-        'P-Value': p_val_geom
-    })
-
-    # ==============================================================================
-    # 3. Distribución Binomial
-    # MoM: Mean = np, Var = np(1-p)
-    # Solo válida si Var < Mean (Subdispersión)
-    # ==============================================================================
+    # 3. BINOMIAL
     if var < mu:
-        # 1-p = Var / Mean  =>  p = 1 - (Var/Mean)
-        p_bin = 1 - (var / mu)
-        
-        # n = Mean / p
-        n_est = mu / p_bin
-        
-        # n debe ser entero, redondeamos
-        n_bin = int(round(n_est))
-        
-        # Recalculamos p para ajustar la media con el nuevo n entero
-        p_bin_adj = mu / n_bin if n_bin > 0 else 0
-        p_bin_adj = max(min(p_bin_adj, 1), 0) # Clip 0-1
-
-        d_bin, p_val_bin = stats.kstest(x, 'binom', args=(n_bin, p_bin_adj))
-        
-        results.append({
-            'Distribución': 'Binomial',
-            'Parámetros': f'n={n_bin}, p={p_bin_adj:.2f}',
-            'KS Stat': d_bin,
-            'P-Value': p_val_bin
-        })
+        p_bin = 1 - (var/mu)
+        n_est = mu/p_bin
+        n_bin = max(int(round(n_est)), int(np.max(x)))
+        p_bin_adj = mu/n_bin
+        chi2, p, note = calculate_chi2_robust(x, 'binom', [n_bin, p_bin_adj], 2)
+        results.append({'Modelo': 'Binomial', 'Parámetros': f'n={n_bin}, p={p_bin_adj:.2f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
     else:
-        results.append({
-            'Distribución': 'Binomial',
-            'Parámetros': 'No Ajustable (Var >= Media)',
-            'KS Stat': 1.0,
-            'P-Value': 0.0
-        })
+        results.append({'Modelo': 'Binomial', 'Parámetros': '-', 'Chi2': np.nan, 'P-Value': 0, 'Notas': 'No aplica (Var >= Mean)'})
 
-    # ==============================================================================
-    # 4. Distribución Binomial Negativa
-    # MoM: Mean = n(1-p)/p, Var = n(1-p)/p^2  (Definición Scipy: Fallos)
-    # Solo válida si Var > Mean (Sobredispersión)
-    # ==============================================================================
+    # 4. BINOMIAL NEGATIVA
     if var > mu:
-        # p = Mean / Var
-        p_nbin = mu / var
-        
-        # n = (Mean * p) / (1-p)
-        n_val = (mu * p_nbin) / (1 - p_nbin)
-        
-        # En Scipy 'n' (r éxitos) puede ser float, no necesita ser entero
-        d_nbin, p_val_nbin = stats.kstest(x, 'nbinom', args=(n_val, p_nbin))
-        
-        results.append({
-            'Distribución': 'Binomial Negativa',
-            'Parámetros': f'n(r)={n_val:.2f}, p={p_nbin:.2f}',
-            'KS Stat': d_nbin,
-            'P-Value': p_val_nbin
-        })
+        p_nbin = mu/var
+        n_val = (mu**2)/(var-mu)
+        chi2, p, note = calculate_chi2_robust(x, 'nbinom', [n_val, p_nbin], 2)
+        results.append({'Modelo': 'Binomial Negativa', 'Parámetros': f'r={n_val:.2f}, p={p_nbin:.2f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
     else:
-        results.append({
-            'Distribución': 'Binomial Negativa',
-            'Parámetros': 'No Ajustable (Var <= Media)',
-            'KS Stat': 1.0,
-            'P-Value': 0.0
-        })
+        results.append({'Modelo': 'Binomial Negativa', 'Parámetros': '-', 'Chi2': np.nan, 'P-Value': 0, 'Notas': 'No aplica (Var <= Mean)'})
 
-    # ==============================================================================
     # Consolidación
-    # ==============================================================================
-    df_results = pd.DataFrame(results)
+    df = pd.DataFrame(results)
+    df = df.dropna(subset=['Chi2']) # Quitamos los modelos que no aplicaron o fallaron
     
-    df_results['¿Ajuste Válido?'] = df_results['P-Value'].apply(
-        lambda p: 'Sí' if p > alpha else 'No (Rechazado)'
-    )
+    if not df.empty:
+        df['Decisión'] = df['P-Value'].apply(lambda val: '✅ Posible' if val > 0.05 else '❌ Rechazado')
+        df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
     
-    df_results = df_results.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+    print(f"Estadísticos: Media={mu:.2f}, Varianza={var:.2f}")
+    if var > mu: print("--> Sobredispersión (Var > Media).")
+    elif var < mu: print("--> Subdispersión (Var < Media).")
     
-    return df_results
+    return df
   
 #============================================================================================
 # DISTRIBUCIONES CONTINUAS GOF
