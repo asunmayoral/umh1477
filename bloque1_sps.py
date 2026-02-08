@@ -127,22 +127,26 @@ def MC_estim(sims):
   return([round(estim,4), round(ic_low,4), round(ic_up,4)])
 
 #============================================================================================
-# DISTRIBUCIONES DISCRETAS GOF con chi-cuadrado
+# AJUSTAR Y COMPARAR DISTRIBUCIONES DISCRETAS GOF con chi-cuadrado
 #============================================================================================
+import numpy as np
+import pandas as pd
+from scipy import stats
 
+# ------------------------------------------------------------------------------
+# 1. FUNCIÓN AUXILIAR (Cálculo matemático riguroso)
+# ------------------------------------------------------------------------------
 def calculate_chi2_robust(data, dist_name, params, n_params_est):
     """
-    Función auxiliar que realiza el binning (agrupación) dinámico 
-    y normaliza frecuencias para evitar errores de tolerancia en chisquare.
+    Realiza el test Chi-Cuadrado con agrupación dinámica (binning) 
+    y normalización de probabilidades para cumplir criterios estadísticos.
     """
-    # 1. Preparar conteos observados
+    # Preparar conteos
     observed_counts = pd.Series(data).value_counts().sort_index()
     total_n = len(data)
-    
-    # Rango de evaluación: desde el min hasta el max observado
     k_values = np.arange(observed_counts.index.min(), observed_counts.index.max() + 1)
     
-    # 2. Calcular Probabilidades Teóricas (PMF)
+    # Calcular PMF teórica
     if dist_name == 'poisson':
         mu = params[0]
         probs = stats.poisson.pmf(k_values, mu)
@@ -156,32 +160,25 @@ def calculate_chi2_robust(data, dist_name, params, n_params_est):
         n, p = params
         probs = stats.nbinom.pmf(k_values, n, p)
         
-    # Frecuencias esperadas iniciales
     expected_freqs = probs * total_n
     
-    # 3. Mapear observados al rango completo
+    # Mapear observados
     obs_dict = observed_counts.to_dict()
     observed_freqs = np.array([obs_dict.get(k, 0) for k in k_values])
     
-    # 4. ALGORITMO DE AGRUPACIÓN (BINNING)
-    obs_grouped = []
-    exp_grouped = []
-    
-    curr_obs = 0
-    curr_exp = 0
+    # Agrupación (Binning) - Regla de Cochran
+    obs_grouped, exp_grouped = [], []
+    curr_obs, curr_exp = 0, 0
     
     for o, e in zip(observed_freqs, expected_freqs):
         curr_obs += o
         curr_exp += e
-        
-        # Criterio: Acumular hasta que lo esperado sea al menos 5
         if curr_exp >= 5:
             obs_grouped.append(curr_obs)
             exp_grouped.append(curr_exp)
             curr_obs = 0
             curr_exp = 0
             
-    # Manejar el residuo (cola final)
     if curr_exp > 0:
         if len(exp_grouped) > 0:
             exp_grouped[-1] += curr_exp
@@ -190,97 +187,121 @@ def calculate_chi2_robust(data, dist_name, params, n_params_est):
             exp_grouped.append(curr_exp)
             obs_grouped.append(curr_obs)
 
-    # 5. --- CORRECCIÓN CRÍTICA ---
-    # Normalizar las frecuencias esperadas para que sumen EXACTAMENTE lo mismo que las observadas.
-    # Esto corrige el ValueError de scipy y compensa la probabilidad perdida en las colas no observadas.
+    # Normalización final
     obs_final = np.array(obs_grouped)
     exp_final = np.array(exp_grouped)
-    
     if np.sum(exp_final) > 0:
         exp_final = exp_final * (np.sum(obs_final) / np.sum(exp_final))
 
-    # 6. Test Chi-Cuadrado
+    # Test
     n_bins = len(exp_final)
     dof = n_bins - 1 - n_params_est
     
     if dof <= 0:
-        # Si no hay suficientes grados de libertad, devolvemos NaN
-        return np.nan, np.nan, f"Bins insuficientes ({n_bins})"
+        return np.nan, np.nan
         
     chi2_stat, p_val = stats.chisquare(f_obs=obs_final, f_exp=exp_final, ddof=n_params_est)
     
-    return chi2_stat, p_val, f"DoF={dof} (Bins={n_bins})"
+    return chi2_stat, p_val
 
 # ------------------------------------------------------------------------------
-# La función maestra
+# 2. FUNCIÓN PRINCIPAL (Ajuste + Reporte Visual)
 # ------------------------------------------------------------------------------
-
 def best_fit_discrete(data):
     """
-    Función Maestra: Ajusta Poisson, Geométrica, Binomial y Binomial Negativa.
-    Retorna DataFrame comparativo ordenado por mejor ajuste.
+    Ajusta modelos discretos, calcula Chi2, imprime un reporte profesional
+    y devuelve el DataFrame con los resultados.
     """
+    # Limpieza de datos
     x = np.array(data)
     x = x[~np.isnan(x)]
-    if len(x) == 0: return "Error: No hay datos."
+    if len(x) == 0: 
+        print("❌ Error: No hay datos válidos.")
+        return pd.DataFrame()
     
-    # Estadísticos
+    # Estadísticos muestrales
     mu = np.mean(x)
     var = np.var(x, ddof=1)
     min_val = np.min(x)
-    
     if var == 0: var = 1e-6
     if mu == 0: mu = 1e-6
     
     results = []
     
-    # 1. POISSON
-    chi2, p, note = calculate_chi2_robust(x, 'poisson', [mu], 1)
-    results.append({'Modelo': 'Poisson', 'Parámetros': f'λ={mu:.2f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
+    # --- AJUSTE DE MODELOS ---
     
-    # 2. GEOMÉTRICA
-    if min_val == 0:
-        p_geom = 1 / (mu + 1)
-        loc_geom = -1
-        lbl = 'Geom (desde 0)'
-    else:
-        p_geom = 1 / mu
-        loc_geom = 0
-        lbl = 'Geom (desde 1)'
-    chi2, p, note = calculate_chi2_robust(x, 'geom', [p_geom, loc_geom], 1)
-    results.append({'Modelo': lbl, 'Parámetros': f'p={p_geom:.3f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
+    # 1. Poisson
+    chi2, p = calculate_chi2_robust(x, 'poisson', [mu], 1)
+    results.append({'Modelo': 'Poisson', 'Parámetros_Txt': f'λ={mu:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'mu': mu}})
     
-    # 3. BINOMIAL
+    # 2. Geométrica
+    if min_val == 0: p_geom = 1/(mu+1); loc_geom = -1; lbl = 'Geom (desde 0)'
+    else: p_geom = 1/mu; loc_geom = 0; lbl = 'Geom (desde 1)'
+    chi2, p = calculate_chi2_robust(x, 'geom', [p_geom, loc_geom], 1)
+    results.append({'Modelo': lbl, 'Parámetros_Txt': f'p={p_geom:.3f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'p': p_geom, 'loc': loc_geom}})
+    
+    # 3. Binomial (Solo si Var < Mean)
     if var < mu:
         p_bin = 1 - (var/mu)
-        n_est = mu/p_bin
-        n_bin = max(int(round(n_est)), int(np.max(x)))
+        n_bin = max(int(round(mu/p_bin)), int(np.max(x)))
         p_bin_adj = mu/n_bin
-        chi2, p, note = calculate_chi2_robust(x, 'binom', [n_bin, p_bin_adj], 2)
-        results.append({'Modelo': 'Binomial', 'Parámetros': f'n={n_bin}, p={p_bin_adj:.2f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
+        chi2, p = calculate_chi2_robust(x, 'binom', [n_bin, p_bin_adj], 2)
+        results.append({'Modelo': 'Binomial', 'Parámetros_Txt': f'n={n_bin}, p={p_bin_adj:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_bin, 'p': p_bin_adj}})
     else:
-        results.append({'Modelo': 'Binomial', 'Parámetros': '-', 'Chi2': np.nan, 'P-Value': 0, 'Notas': 'No aplica (Var >= Mean)'})
+        results.append({'Modelo': 'Binomial', 'Parámetros_Txt': '-', 'Chi2': np.nan, 'P-Value': 0, 'Params_Dict': {}})
 
-    # 4. BINOMIAL NEGATIVA
+    # 4. Binomial Negativa (Solo si Var > Mean)
     if var > mu:
         p_nbin = mu/var
         n_val = (mu**2)/(var-mu)
-        chi2, p, note = calculate_chi2_robust(x, 'nbinom', [n_val, p_nbin], 2)
-        results.append({'Modelo': 'Binomial Negativa', 'Parámetros': f'r={n_val:.2f}, p={p_nbin:.2f}', 'Chi2': chi2, 'P-Value': p, 'Notas': note})
+        chi2, p = calculate_chi2_robust(x, 'nbinom', [n_val, p_nbin], 2)
+        results.append({'Modelo': 'Binomial Negativa', 'Parámetros_Txt': f'r={n_val:.2f}, p={p_nbin:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_val, 'p': p_nbin}})
     else:
-        results.append({'Modelo': 'Binomial Negativa', 'Parámetros': '-', 'Chi2': np.nan, 'P-Value': 0, 'Notas': 'No aplica (Var <= Mean)'})
+        results.append({'Modelo': 'Binomial Negativa', 'Parámetros_Txt': '-', 'Chi2': np.nan, 'P-Value': 0, 'Params_Dict': {}})
 
-    # Consolidación
-    df = pd.DataFrame(results)
-    df = df.dropna(subset=['Chi2']) # Quitamos los modelos que no aplicaron o fallaron
+    # --- PROCESAMIENTO FINAL ---
+    df = pd.DataFrame(results).dropna(subset=['Chi2'])
     
-    if not df.empty:
-        df['Decisión'] = df['P-Value'].apply(lambda val: '✅ Posible' if val > 0.05 else '❌ Rechazado')
-        df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+    if df.empty:
+        print("⚠️ No se pudo ajustar ningún modelo válido (¿pocos datos?).")
+        return df
+
+    # Crear columnas visuales y ordenar
+    df['Decision'] = df['P-Value'].apply(lambda val: '✅ Aceptable' if val > 0.05 else '❌ Rechazado')
+    df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+
+    # --- IMPRESIÓN DEL REPORTE "BONITO" ---
+    print("\n" + "═"*75)
+    print("📊  RESULTADOS DEL AJUSTE DE DISTRIBUCIONES (CHI-CUADRADO)")
+    print("═"*75)
     
-    print(f"Estadísticos: Media={mu:.2f}, Varianza={var:.2f}")
-    if var > mu: print("--> Sobredispersión (Var > Media).")
-    elif var < mu: print("--> Subdispersión (Var < Media).")
+    # Imprimir tabla limpia
+    cols_visuales = ['Modelo', 'Parámetros_Txt', 'Chi2', 'P-Value', 'Decision']
+    # Formato de pandas para que se vea alineado
+    print(df[cols_visuales].to_string(index=False, formatters={
+        'Chi2': '{:,.4f}'.format,
+        'P-Value': '{:,.4f}'.format
+    }))
+    print("─"*75)
+
+    # --- CONCLUSIÓN AUTOMÁTICA ---
+    best_row = df.iloc[0]
+    best_model = best_row['Modelo']
+    best_p = best_row['P-Value']
+    best_params = best_row['Params_Dict']
+
+    print(f"\n🏆  MEJOR MODELO SELECCIONADO: \033[1m{best_model}\033[0m")
+    
+    if best_p > 0.05:
+        print(f"    ✅ Ajuste estadísticamente válido (P-Value: {best_p:.4f} > 0.05).")
+        print("       No hay evidencia suficiente para rechazar que los datos sigan esta distribución.")
+    else:
+        print(f"    ⚠️  Ajuste pobre (P-Value: {best_p:.4f} < 0.05).")
+        print("       El modelo es la mejor opción disponible, pero estadísticamente no es perfecto.")
+
+    print(f"\n⚙️  PARÁMETROS TÉCNICOS (Diccionario):")
+    print(f"    {best_params}")
+    print("═"*75 + "\n")
     
     return df
   
