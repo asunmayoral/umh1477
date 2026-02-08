@@ -306,212 +306,194 @@ def best_fit_discrete(data):
     return df
   
 #============================================================================================
-# DISTRIBUCIONES CONTINUAS GOF
+# AJUSTE Y COMPARACIÓN DE DISTRIBUCIONES CONTINUAS GOF
 #============================================================================================
 
-def gof_distr(data):
+def gof_continuous(data):
     """
-    Ajusta y Evalúa la bondad de ajuste de múltiples distribuciones continuas utilizando
-    el Test de Kolmogorov-Smirnov y estimación de parámetros por el MÉTODO DE LOS MOMENTOS (MoM).
-    
-    Distribuciones: Uniforme, Exponencial, Normal, Gamma, Erlang, Triangular, Weibull, Log-Normal.
+    Ajusta distribuciones continuas (MOM) y genera un reporte visual profesional.
+    Devuelve un DataFrame con parámetros accesibles en 'Params_Dict'.
     """
     
-    # 1. Preparación de datos y estadísticos básicos
+    # 1. Preparación de datos
     x = np.array(data)
-    x = x[~np.isnan(x)] # Eliminar NaNs si existen
-    n = len(x)
-    
-    # Nivel de significancia
-    alpha = 0.05
-    
-    # Momentos Muestrales
+    x = x[~np.isnan(x)]
+    if len(x) == 0:
+        print("❌ Error: No hay datos válidos.")
+        return pd.DataFrame()
+
+    # Estadísticos básicos
     mu = np.mean(x)
-    var = np.var(x, ddof=1) # Varianza muestral (n-1)
-    std = np.std(x, ddof=1) # Desviación estándar
+    var = np.var(x, ddof=1)
+    std = np.std(x, ddof=1)
     x_min = np.min(x)
     x_max = np.max(x)
     
     results = []
 
     # ==============================================================================
-    # 1. Distribución Uniforme
-    # MoM: Rango = sqrt(12 * var). Centrada en la media.
+    # 1. UNIFORME
     # ==============================================================================
     range_uni = np.sqrt(12 * var)
     uni_a = mu - (range_uni / 2)
-    uni_scale = range_uni # scale = b - a
+    uni_scale = range_uni
     
-    d_uni, p_uni = stats.kstest(x, 'uniform', args=(uni_a, uni_scale))
-    
+    d, p = stats.kstest(x, 'uniform', args=(uni_a, uni_scale))
     results.append({
         'Distribución': 'Uniforme',
-        'Parámetros': f'Min={uni_a:.2f}, Range={uni_scale:.2f}',
-        'KS Stat': d_uni,
-        'P-Value': p_uni
+        'Parámetros_Txt': f'Min={uni_a:.2f}, Range={uni_scale:.2f}',
+        'Params_Dict': {'loc': uni_a, 'scale': uni_scale},
+        'KS Stat': d, 'P-Value': p
     })
 
     # ==============================================================================
-    # 2. Distribución Exponencial
-    # MoM: Scale = Media. (Asumiendo loc=0, típica en tiempos de espera)
+    # 2. EXPONENCIAL
     # ==============================================================================
     exp_scale = mu
-    d_exp, p_exp = stats.kstest(x, 'expon', args=(0, exp_scale))
-    
+    d, p = stats.kstest(x, 'expon', args=(0, exp_scale))
     results.append({
         'Distribución': 'Exponencial',
-        'Parámetros': f'Scale={exp_scale:.2f}',
-        'KS Stat': d_exp,
-        'P-Value': p_exp
+        'Parámetros_Txt': f'Scale={exp_scale:.2f}',
+        'Params_Dict': {'loc': 0, 'scale': exp_scale},
+        'KS Stat': d, 'P-Value': p
     })
 
     # ==============================================================================
-    # 3. Distribución Normal
-    # MoM: Media = mu, Scale = std
+    # 3. NORMAL
     # ==============================================================================
-    d_norm, p_norm = stats.kstest(x, 'norm', args=(mu, std))
-    
+    d, p = stats.kstest(x, 'norm', args=(mu, std))
     results.append({
         'Distribución': 'Normal',
-        'Parámetros': f'Mu={mu:.2f}, Std={std:.2f}',
-        'KS Stat': d_norm,
-        'P-Value': p_norm
+        'Parámetros_Txt': f'Mu={mu:.2f}, Std={std:.2f}',
+        'Params_Dict': {'loc': mu, 'scale': std},
+        'KS Stat': d, 'P-Value': p
     })
 
     # ==============================================================================
-    # 4. Distribución Gamma
-    # MoM: alpha = mu^2 / var, scale = var / mu
+    # 4. GAMMA
     # ==============================================================================
-    gam_scale = var / mu
-    gam_a = (mu ** 2) / var
-    
-    d_gam, p_gam = stats.kstest(x, 'gamma', args=(gam_a, 0, gam_scale))
-    
-    results.append({
-        'Distribución': 'Gamma',
-        'Parámetros': f'Alpha={gam_a:.2f}, Beta={gam_scale:.2f}',
-        'KS Stat': d_gam,
-        'P-Value': p_gam
-    })
+    if var > 0 and mu != 0:
+        gam_scale = var / mu
+        gam_a = (mu ** 2) / var
+        d, p = stats.kstest(x, 'gamma', args=(gam_a, 0, gam_scale))
+        results.append({
+            'Distribución': 'Gamma',
+            'Parámetros_Txt': f'Alpha={gam_a:.2f}, Beta={gam_scale:.2f}',
+            'Params_Dict': {'a': gam_a, 'loc': 0, 'scale': gam_scale},
+            'KS Stat': d, 'P-Value': p
+        })
 
     # ==============================================================================
-    # 5. Distribución Erlang
-    # MoM: Igual que Gamma pero k debe ser entero.
-    # Ajustamos k redondeando y recalculamos scale para mantener la media.
+    # 5. ERLANG (Gamma con shape entero)
     # ==============================================================================
-    erl_k = max(1, round((mu ** 2) / var))
-    erl_scale = mu / erl_k
-    
-    # Scipy no tiene 'erlang' explícita, usamos gamma con shape entero
-    d_erl, p_erl = stats.kstest(x, 'gamma', args=(erl_k, 0, erl_scale))
-    
-    results.append({
-        'Distribución': 'Erlang',
-        'Parámetros': f'k={int(erl_k)}, Beta={erl_scale:.2f}',
-        'KS Stat': d_erl,
-        'P-Value': p_erl
-    })
+    if var > 0 and mu != 0:
+        erl_k = max(1, round((mu ** 2) / var))
+        erl_scale = mu / erl_k
+        d, p = stats.kstest(x, 'gamma', args=(erl_k, 0, erl_scale))
+        results.append({
+            'Distribución': 'Erlang',
+            'Parámetros_Txt': f'k={int(erl_k)}, Beta={erl_scale:.2f}',
+            'Params_Dict': {'a': erl_k, 'loc': 0, 'scale': erl_scale},
+            'KS Stat': d, 'P-Value': p
+        })
 
     # ==============================================================================
-    # 6. Distribución Triangular
-    # MoM Heurístico: Usamos min y max empíricos.
-    # Despejamos la moda (c) usando la fórmula de la media: mu = (a+b+c)/3
+    # 6. TRIANGULAR
     # ==============================================================================
-    tri_loc = x_min # a
-    tri_scale = x_max - x_min # b - a
-    
-    # Estimación de la moda (c real)
+    tri_loc = x_min
+    tri_scale = x_max - x_min
     mode_est = 3 * mu - x_min - x_max
+    mode_est = max(x_min, min(x_max, mode_est)) # Clamp
     
-    # Restricción: la moda debe estar dentro del rango [min, max]
-    mode_est = max(x_min, min(x_max, mode_est))
-    
-    # Parámetro c para scipy (proporción 0-1)
     if tri_scale > 0:
         tri_c = (mode_est - tri_loc) / tri_scale
-    else:
-        tri_c = 0.5 # Caso degenerado (varianza 0)
-
-    d_tri, p_tri = stats.kstest(x, 'triang', args=(tri_c, tri_loc, tri_scale))
-    
-    results.append({
-        'Distribución': 'Triangular',
-        'Parámetros': f'Min={tri_loc:.2f}, Mode={mode_est:.2f}, Max={x_max:.2f}',
-        'KS Stat': d_tri,
-        'P-Value': p_tri
-    })
+        d, p = stats.kstest(x, 'triang', args=(tri_c, tri_loc, tri_scale))
+        results.append({
+            'Distribución': 'Triangular',
+            'Parámetros_Txt': f'c={tri_c:.2f}, Loc={tri_loc:.2f}, Scale={tri_scale:.2f}',
+            'Params_Dict': {'c': tri_c, 'loc': tri_loc, 'scale': tri_scale},
+            'KS Stat': d, 'P-Value': p
+        })
 
     # ==============================================================================
-    # 7. Distribución Weibull
-    # MoM Numérico: No hay solución cerrada para k (shape).
-    # Ecuación a resolver: CV^2 = (std/mu)^2 = [Gamma(1+2/k) / Gamma(1+1/k)^2] - 1
+    # 7. WEIBULL
     # ==============================================================================
-    cv_sq = (std / mu) ** 2
-    
-    def weibull_eq(k):
-        # Función objetivo para encontrar k
-        if k <= 0: return 100.0
-        return (gamma(1 + 2/k) / (gamma(1 + 1/k)**2)) - 1 - cv_sq
+    if mu > 0 and std > 0:
+        cv_sq = (std / mu) ** 2
+        def weibull_eq(k):
+            if k <= 0: return 100.0
+            return (gamma(1 + 2/k) / (gamma(1 + 1/k)**2)) - 1 - cv_sq
 
-    # Resolver numéricamente para k (shape)
-    try:
-        wei_k = optimize.fsolve(weibull_eq, 1.0)[0] # Semilla inicial = 1 (Exponencial)
-    except:
-        wei_k = 1.0
+        try:
+            wei_k = optimize.fsolve(weibull_eq, 1.0)[0]
+        except:
+            wei_k = 1.0
         
-    # Una vez tenemos k, obtenemos lambda (scale)
-    wei_scale = mu / gamma(1 + 1/wei_k)
-    
-    d_wei, p_wei = stats.kstest(x, 'weibull_min', args=(wei_k, 0, wei_scale))
-    
-    results.append({
-        'Distribución': 'Weibull',
-        'Parámetros': f'Shape={wei_k:.2f}, Scale={wei_scale:.2f}',
-        'KS Stat': d_wei,
-        'P-Value': p_wei
-    })
+        if wei_k > 0:
+            wei_scale = mu / gamma(1 + 1/wei_k)
+            d, p = stats.kstest(x, 'weibull_min', args=(wei_k, 0, wei_scale))
+            results.append({
+                'Distribución': 'Weibull',
+                'Parámetros_Txt': f'Shape={wei_k:.2f}, Scale={wei_scale:.2f}',
+                'Params_Dict': {'c': wei_k, 'loc': 0, 'scale': wei_scale},
+                'KS Stat': d, 'P-Value': p
+            })
 
     # ==============================================================================
-    # 8. Distribución Log-Normal
-    # MoM Analítico:
-    # sigma^2 = ln(1 + var/mu^2)
-    # mu_log = ln(mu) - sigma^2/2
-    # Scipy params: s = sigma, scale = exp(mu_log)
+    # 8. LOG-NORMAL
     # ==============================================================================
-    # Cálculo de los parámetros de la Normal subyacente
-    # phi^2 es el segundo momento crudo E[X^2] = Var + Mean^2
-    phi = np.sqrt(var + mu**2)
-    
-    mu_log = np.log(mu**2 / phi)          # media de ln(x)
-    sigma_log = np.sqrt(np.log(phi**2 / mu**2))  # std de ln(x)
-    
-    scale_log = np.exp(mu_log) # scale es e^mu
-    
-    # KS Test (s es sigma_log, scale es e^mu_log)
-    d_logn, p_logn = stats.kstest(x, 'lognorm', args=(sigma_log, 0, scale_log))
-    
-    results.append({
-        'Distribución': 'Log-Normal',
-        'Parámetros': f's={sigma_log:.2f}, Scale={scale_log:.2f}',
-        'KS Stat': d_logn,
-        'P-Value': p_logn
-    })
+    if min_val := np.min(x) > 0: # Solo si todos son positivos
+        phi = np.sqrt(var + mu**2)
+        mu_log = np.log(mu**2 / phi)
+        sigma_log = np.sqrt(np.log(phi**2 / mu**2))
+        scale_log = np.exp(mu_log)
+        
+        d, p = stats.kstest(x, 'lognorm', args=(sigma_log, 0, scale_log))
+        results.append({
+            'Distribución': 'Log-Normal',
+            'Parámetros_Txt': f's={sigma_log:.2f}, Scale={scale_log:.2f}',
+            'Params_Dict': {'s': sigma_log, 'loc': 0, 'scale': scale_log},
+            'KS Stat': d, 'P-Value': p
+        })
 
-    # ==============================================================================
-    # Consolidación de Resultados
-    # ==============================================================================
-    df_results = pd.DataFrame(results)
+    # --- PROCESAMIENTO FINAL ---
+    df = pd.DataFrame(results)
+    if df.empty: return df
+
+    df['Decision'] = df['P-Value'].apply(lambda val: '✅ Aceptable' if val > 0.05 else '❌ Rechazado')
+    df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+
+    # --- REPORTE VISUAL ---
+    print("\n" + "═"*80)
+    print("📊  RESULTADOS DEL AJUSTE (DISTRIBUCIONES CONTINUAS - KS TEST)")
+    print("═"*80)
     
-    # Añadir columna de decisión
-    df_results['¿Ajuste Válido?'] = df_results['P-Value'].apply(
-        lambda p: 'Sí' if p > alpha else 'No (Rechazado)'
-    )
+    cols_show = ['Distribución', 'Parámetros_Txt', 'KS Stat', 'P-Value', 'Decision']
+    print(df[cols_show].to_string(index=False, formatters={
+        'KS Stat': '{:.4f}'.format,
+        'P-Value': '{:.4f}'.format
+    }))
+    print("─"*80)
+
+    # Ganador
+    best = df.iloc[0]
+    print(f"\n🏆  MEJOR AJUSTE: \033[1m{best['Distribución']}\033[0m")
+    print(f"    P-Value: {best['P-Value']:.4f}")
+    if best['P-Value'] > 0.05:
+        print("    ✅ No hay evidencia para rechazar esta distribución.")
+    else:
+        print("    ⚠️ Precaución: El ajuste no es ideal (P-Value < 0.05).")
     
-    # Ordenar por P-Value descendente (Mejor ajuste arriba)
-    df_results = df_results.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+    print(f"\n⚙️  PARÁMETROS TÉCNICOS (Para Scipy):")
+    print(f"    {best['Params_Dict']}")
+    print("═"*80 + "\n")
     
-    return df_results
+    # acceder al ganador  
+    # ganador = df_ajuste.iloc[0]
+    # modelo = ganador['Distribución']
+    # params = ganador['Params_Dict']
     
+    return df
   
 #============================================================================================
 # CMTD
